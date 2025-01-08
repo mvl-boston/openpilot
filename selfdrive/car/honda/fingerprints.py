@@ -953,6 +953,26 @@ FW_VERSIONS = {
     ],
   },
   CAR.HONDA_CRV_HYBRID_6G: {
+    (Ecu.gateway, 0x18daeff1, None): [
+      b'38897-3D0-A610\x00\x00',
+      b'\x0bM0562167040\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00',
+    ],
+    (Ecu.eps, 0x18da30f1, None): [
+      b'39990-3A0-A130\x00\x00',
+      b'\x0c BK4D010395C                  ',
+    ],
+    (Ecu.srs, 0x18da53f1, None): [
+      b'77959-3D4-A910\x00\x00',
+      b'\x0bC2NS07LF800\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00',
+    ],
+    (Ecu.vsa, 0x18da28f1, None): [
+      b'57114-3D4-A020\x00\x00',
+      b'\x0b42375705510\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00',
+    ],
+    (Ecu.combinationMeter, 0x18DA60F1, None): [
+      b'78108-3D5-A320\x00\x00',
+      b'\x18R2380383\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00',
+    ],
     (Ecu.fwdRadar, 0x18dab0f1, None): [
       b'8S302-3D4-A050\x00\x00',
       b'\x107422202408300462\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00',
