@@ -75,11 +75,11 @@ class CarInterface(CarInterfaceBase):
       # ret.longitudinalTuning.kpV = [0.25]
       # ret.longitudinalTuning.kiV = [0.05]
       
-      # try default tuning instead
+      # use default Honda tuning, revise pedal curve  
       ret.longitudinalTuning.kpBP = [0., 5., 35.]
-      ret.longitudinalTuning.kpV = [4.8, 3.2, 0.5] # quadrupling slower breakpoints
+      ret.longitudinalTuning.kpV = [1.2, 0.8, 0.5] 
       ret.longitudinalTuning.kiBP = [0., 35.]
-      ret.longitudinalTuning.kiV = [0.72, 0.12] # quadrupling slower breakpoints
+      ret.longitudinalTuning.kiV = [0.18, 0.12] 
       
       ret.longitudinalActuatorDelayUpperBound = 0.5 # s
       if candidate in HONDA_BOSCH_RADARLESS:
