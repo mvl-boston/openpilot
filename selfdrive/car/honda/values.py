@@ -30,11 +30,11 @@ class CarControllerParams:
   NIDEC_GAS_MAX = 198  # 0xc6
   NIDEC_BRAKE_MAX = 1024 // 4
 
-  BOSCH_ACCEL_MIN = -4.0  # m/s^2   - try same bigger min as for NIDEC
+  BOSCH_ACCEL_MIN = -3.5  # m/s^2   - reverting to standard, factor are revised below
   BOSCH_ACCEL_MAX = 2.0  # m/s^2
 
-  BOSCH_GAS_LOOKUP_BP = [-0.2, 2.0]  # 2m/s^2
-  BOSCH_GAS_LOOKUP_V = [0, 1600]
+  BOSCH_GAS_LOOKUP_BP = [-3.5, 0, 2.0]  # breakpoints in m/s^2
+  BOSCH_GAS_LOOKUP_V = [-14, 0, 4000] # added negative breakpoints for stronger braking, doubled acceleration, will further tune once plotjuggler is working
 
   def __init__(self, CP):
     self.STEER_MAX = CP.lateralParams.torqueBP[-1]
