@@ -216,16 +216,18 @@ class CarController(CarControllerBase):
 
         if self.CP.carFingerprint in HONDA_BOSCH:
           self.accel = clip(accel, self.params.BOSCH_ACCEL_MIN, self.params.BOSCH_ACCEL_MAX)
-          
-          # implement as pedalfactors
-          self.accel = interp(accel, self.params.BOSCH_GAS_LOOKUP_BP, self.params.BOSCH_GAS_LOOKUP_V)
 
-          self.gas = self.accel
+          # self.gas = interp(accel, self.params.BOSCH_GAS_LOOKUP_BP, self.params.BOSCH_GAS_LOOKUP_V)
+          # implement as pedalfactors instead
+          wind_brake = CS.out.vEgo * CS.out.vEgo * 0.0003 # factor fit from plotjuggler
+          idle_accel = 0.0001 # set to equal wind_brake at 4mph, which was observed breakeven idle speed
+          pedal_accel = accel + wind_brake - idle_accel
+          self.gas = pedal_accel * 4000 # factor fit from plotjuggler
 
           stopping = actuators.longControlState == LongCtrlState.stopping
           self.stopping_counter = self.stopping_counter + 1 if stopping else 0
           can_sends.extend(hondacan.create_acc_commands(self.packer, self.CAN, CC.enabled, CC.longActive, self.accel, self.gas,
-                                                        self.stopping_counter, self.CP.carFingerprint))
+                                                        self.stopping_counter, self.CP.carFingerprint, idle_accel - wind_brake))
         else:
           apply_brake = clip(self.brake_last - wind_brake, 0.0, 1.0)
           apply_brake = int(clip(apply_brake * self.params.NIDEC_BRAKE_MAX, 0, self.params.NIDEC_BRAKE_MAX - 1))
