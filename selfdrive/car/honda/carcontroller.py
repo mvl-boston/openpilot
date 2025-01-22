@@ -222,7 +222,7 @@ class CarController(CarControllerBase):
           wind_brake = CS.out.vEgo * CS.out.vEgo * 0.0003 # factor fit from plotjuggler
           idle_accel = 0.0001 # set to equal wind_brake at 4mph, which was observed breakeven idle speed
           pedal_accel = accel + wind_brake - idle_accel
-          self.gas = pedal_accel * 4000 # factor fit from plotjuggler
+          self.gas = pedal_accel * 2000 # factor fit from plotjuggler
 
           stopping = actuators.longControlState == LongCtrlState.stopping
           self.stopping_counter = self.stopping_counter + 1 if stopping else 0
