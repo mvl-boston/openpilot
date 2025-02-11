@@ -74,6 +74,9 @@ class CarInterface(CarInterfaceBase):
     # Accord ICE 1.5T CVT has different gearbox message
     if candidate == CAR.HONDA_ACCORD and 0x191 in fingerprint[CAN.pt]:
       ret.transmissionType = TransmissionType.cvt
+    # 11G Accord
+    elif candidate == CAR.HONDA_ACCORD_11G and 0x1A3 not in fingerprint[CAN.pt]:
+      ret.transmissionType = TransmissionType.cvt
     # New Civics can have manual transmission
     elif candidate == CAR.HONDA_CIVIC_2022 and 0x191 not in fingerprint[CAN.pt]:
       ret.transmissionType = TransmissionType.manual
@@ -129,7 +132,7 @@ class CarInterface(CarInterfaceBase):
     elif candidate == CAR.HONDA_ACCORD_11G:
       ret.lateralParams.torqueBP, ret.lateralParams.torqueV = [[0, 4096], [0, 4096]]
       ret.lateralTuning.pid.kpV, ret.lateralTuning.pid.kiV = [[0.2], [0.18]]
-      
+
     elif candidate == CAR.HONDA_ACCORD:
       ret.lateralParams.torqueBP, ret.lateralParams.torqueV = [[0, 4096], [0, 4096]]  # TODO: determine if there is a dead zone at the top end
 

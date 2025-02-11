@@ -62,7 +62,6 @@ class HondaFlags(IntFlag):
 
   CANFD_CAR = 128
 
-
 # Car button codes
 class CruiseButtons:
   RES_ACCEL = 4
