@@ -83,6 +83,7 @@ def get_stopped_equivalence_factor(v_lead):
 
 def get_safe_obstacle_distance(v_ego, t_follow):
   driver_confidence_addon = 4 if v_ego > 2 else 1   # prefer additional stopping distance until under 5mph and prefer an additional meter at all times
+  driver_confidence_addon = 3 # temporarily set to a constant, since code won't compile
   return (v_ego**2) / (2 * COMFORT_BRAKE) + t_follow * v_ego + STOP_DISTANCE + driver_confidence_addon
 
 def desired_follow_distance(v_ego, v_lead, t_follow=None):
