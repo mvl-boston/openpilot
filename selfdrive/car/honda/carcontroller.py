@@ -102,7 +102,7 @@ HUDData = namedtuple("HUDData",
 
 def rate_limit_steer(new_steer, last_steer):
   # TODO just hardcoded ramp to min/max in 0.33s for all Honda
-  MAX_DELTA = 10 * DT_CTRL
+  MAX_DELTA = 3 * DT_CTRL
   return clip(new_steer, last_steer - MAX_DELTA, last_steer + MAX_DELTA)
 
 
