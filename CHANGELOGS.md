@@ -1,3 +1,8 @@
+hamstapilot (SP Mod) - 0.9.8.2 (2024-xx-xx)
+========================
+* Reverted pull request that affected steering
+* Added additional fingerprints
+
 hamstapilot (SP Mod) - 0.9.8.1 (2024-xx-xx)
 ========================
 * Removed steering limiter and fixed control error
