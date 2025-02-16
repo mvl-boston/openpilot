@@ -72,7 +72,7 @@ def create_brake_command(packer, CAN, apply_brake, pump_on, pcm_override, pcm_ca
 
 def create_acc_commands(packer, CAN, enabled, active, accel, gas, stopping_counter, car_fingerprint):
   commands = []
-  min_gas_accel = 0.01 # force to -0.1, earlier dynamic caused braking issues
+  min_gas_accel = -0.01 # force to -0.01, earlier dynamic caused braking issues
 
   control_on = 5 if enabled else 0
   gas_command = gas if active and accel > min_gas_accel else -30000
