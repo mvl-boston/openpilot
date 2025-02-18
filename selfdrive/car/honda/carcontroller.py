@@ -140,7 +140,7 @@ class CarController(CarControllerBase):
     else:
       accel = 0.0
       gas, brake = 0.0, 0.0
-      self.gas_last = CS.out.aEgo * 1000
+      # self.gas_last = CS.out.aEgo * 1000
 
     # *** rate limit steer ***
     limited_steer = rate_limit_steer(actuators.steer, self.last_steer)
@@ -223,8 +223,8 @@ class CarController(CarControllerBase):
 
           # self.gas = interp(accel, self.params.BOSCH_GAS_LOOKUP_BP, self.params.BOSCH_GAS_LOOKUP_V)
           
-          self.gas_target = self.gas_last + ( self.accel - CS.out.aEgo ) * 700 # factor modeled to smooth out pedal
-          self.gas = clip ( clip ( self.gas_target, self_gas_last - 40, self_gas_last + 40) , 0, 2000 ) # setting gas to max 40 move, doing full 2000 pedal in 50hz
+          self.gas_target = self.gas_last + ( self.accel - CS.out.aEgo ) * 560 # factor modeled to smooth out pedal
+          self.gas = clip ( clip ( self.gas_target, self_gas_last - 32, self_gas_last + 32) , 0, 1600 ) # setting gas to max 32 move, doing full 1600 pedal in 50hz
           self.gas_last = self.gas
 
           stopping = actuators.longControlState == LongCtrlState.stopping
