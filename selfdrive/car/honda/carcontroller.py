@@ -204,6 +204,7 @@ class CarController(CarControllerBase):
       pcm_accel = int(clip((accel / 1.44) / max_accel, 0.0, 1.0) * self.params.NIDEC_GAS_MAX)
 
     if not self.CP.openpilotLongitudinalControl:
+
       if self.frame % 2 == 0 and self.CP.carFingerprint not in HONDA_BOSCH_RADARLESS:  # radarless cars don't have supplemental message
         can_sends.append(hondacan.create_bosch_supplemental_1(self.packer, self.CAN, self.CP.carFingerprint))
       # If using stock ACC, spam cancel command to kill gas when OP disengages.
@@ -222,8 +223,8 @@ class CarController(CarControllerBase):
 
           # self.gas = interp(accel, self.params.BOSCH_GAS_LOOKUP_BP, self.params.BOSCH_GAS_LOOKUP_V)
           
-          self.gas_target = ( self.accel - CS.out.aEgo ) * 350 # factor modeled to smooth out pedal
-          self.gas = clip ( clip ( self.gas_target, self_gas_last - 20, self_gas_last + 20) , 0, 2000 ) # setting gas to max 20 move, doing full 2000 pedal in 100hz
+          self.gas_target = self.gas_last + ( self.accel - CS.out.aEgo ) * 700 # factor modeled to smooth out pedal
+          self.gas = clip ( clip ( self.gas_target, self_gas_last - 40, self_gas_last + 40) , 0, 2000 ) # setting gas to max 40 move, doing full 2000 pedal in 50hz
           self.gas_last = self.gas
 
           stopping = actuators.longControlState == LongCtrlState.stopping
