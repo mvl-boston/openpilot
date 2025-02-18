@@ -122,6 +122,8 @@ class CarController(CarControllerBase):
     self.accel = 0.0
     self.speed = 0.0
     self.gas = 0.0
+    self.gas_last = 0.0 # used for HONDA_BOSCH
+    self.gas_target = 0.0 # used for HONDA_BOSCH
     self.brake = 0.0
     self.last_steer = 0.0
 
@@ -138,6 +140,7 @@ class CarController(CarControllerBase):
     else:
       accel = 0.0
       gas, brake = 0.0, 0.0
+      self.gas_last = CS.out.aEgo * 1000
 
     # *** rate limit steer ***
     limited_steer = rate_limit_steer(actuators.steer, self.last_steer)
@@ -218,11 +221,10 @@ class CarController(CarControllerBase):
           self.accel = clip(accel, self.params.BOSCH_ACCEL_MIN, self.params.BOSCH_ACCEL_MAX)
 
           # self.gas = interp(accel, self.params.BOSCH_GAS_LOOKUP_BP, self.params.BOSCH_GAS_LOOKUP_V)
-          # implement as pedalfactors instead
-          wind_brake = CS.out.vEgo * CS.out.vEgo * 0.0003 # factor fit from plotjuggler
-          idle_accel = 0.0001 # set to equal wind_brake at 4mph, which was observed breakeven idle speed
-          pedal_accel = accel + wind_brake - idle_accel
-          self.gas = pedal_accel * 1000 # increasing from 800 to 1000 as first test, the factor fit from plotjuggler is closer to 2000
+          
+          self.gas_target = ( self.accel - CS.out.aEgo ) * 350 # factor modeled to smooth out pedal
+          self.gas = clip ( clip ( self.gas_target, self_gas_last - 20, self_gas_last + 20) , 0, 2000 ) # setting gas to max 20 move, doing full 2000 pedal in 100hz
+          self.gas_last = self.gas
 
           stopping = actuators.longControlState == LongCtrlState.stopping
           self.stopping_counter = self.stopping_counter + 1 if stopping else 0
