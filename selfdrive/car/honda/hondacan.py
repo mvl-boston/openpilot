@@ -72,7 +72,7 @@ def create_brake_command(packer, CAN, apply_brake, pump_on, pcm_override, pcm_ca
 
 def create_acc_commands(packer, CAN, enabled, active, accel, gas, stopping_counter, car_fingerprint):
   commands = []
-  min_gas_accel = 0 if CS.out.vEgo < 4 / 2.23694 else -0.03 # allow wind brake above 4 mph, otherwise brake at neg accel below idle speed of 4mph
+  min_gas_accel = -0.2 if CS.out.vEgo < 4 / 2.23694 else -0.3 # allow wind brake above 4 mph, otherwise brake at neg accel below idle speed of 4mph --- temp set to -0.2 since software crashed
 
   control_on = 5 if enabled else 0
   gas_command = gas if active and accel > min_gas_accel else -30000
