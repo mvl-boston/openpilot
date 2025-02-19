@@ -34,7 +34,7 @@ class CarControllerParams:
   BOSCH_ACCEL_MAX = 2.0  # m/s^2
 
   BOSCH_GAS_LOOKUP_BP = [-0.2, 2.0]  # 2m/s^2
-  BOSCH_GAS_LOOKUP_V = [0, 1600]
+  BOSCH_GAS_LOOKUP_V = [0, 1999]
 
   def __init__(self, CP):
     self.STEER_MAX = CP.lateralParams.torqueBP[-1]
