@@ -223,8 +223,8 @@ class CarController(CarControllerBase):
 
           # self.gas = interp(accel, self.params.BOSCH_GAS_LOOKUP_BP, self.params.BOSCH_GAS_LOOKUP_V)
           
-          self.gas_target = self.gas_last + ( self.accel - CS.out.aEgo ) * 560 # factor modeled to smooth out pedal
-          self.gas = clip ( clip ( self.gas_target, self_gas_last - 32, self_gas_last + 32) , 0, 1600 ) # setting gas to max 32 move, doing full 1600 pedal in 50hz
+          self.gas_target = self.gas_last + clip ( ( self.accel - CS.out.aEgo ) * 560, -32, + 32) # factors modeled to smooth out pedal, doing full 1600 pedal in 50hz
+          self.gas = clip ( self.gas_target, 0, 1600 ) 
           self.gas_last = self.gas
 
           stopping = actuators.longControlState == LongCtrlState.stopping
