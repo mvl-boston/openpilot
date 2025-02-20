@@ -706,7 +706,7 @@ FW_VERSIONS = {
       b'39990-TJB-A130\x00\x00',
     ],
   },
-CAR.ACURA_RDX_3G_MMR: {
+  CAR.ACURA_RDX_3G_MMR: {
     (Ecu.vsa, 0x18da28f1, None): [
       b'57114-TJB-A120\x00\x00',
     ],
