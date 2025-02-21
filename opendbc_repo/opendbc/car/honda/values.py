@@ -114,6 +114,8 @@ class Footnote(Enum):
   CIVIC_DIESEL = CarFootnote(
     "2019 Honda Civic 1.6L Diesel Sedan does not have ALC below 12mph.",
     Column.FSR_STEERING)
+
+class Footnote(Enum):  
   STEER_LIMITING_RADAR = CarFootnote(
     "Stock LKAS limitations apply when used with Stock ACC, including minimum speed and active windshield wiper mode.",
     Column.FSR_STEERING)
