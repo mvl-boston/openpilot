@@ -52,6 +52,9 @@ def get_can_messages(CP, gearbox_msg):
   if CP.flags & HondaFlags.BOSCH_ALT_BRAKE:
     messages.append(("BRAKE_MODULE", 50))
 
+  if CP.flags & HondaFlags.BOSCH_ALT_BRAKE_PCM_ACCEL:
+    messages.append(("BRAKE_MODULE", 50))
+
   if CP.carFingerprint in (HONDA_BOSCH | {CAR.HONDA_CIVIC, CAR.HONDA_ODYSSEY, CAR.HONDA_ODYSSEY_CHN}):
     messages.append(("EPB_STATUS", 50))
 
@@ -223,6 +226,8 @@ class CarState(CarStateBase):
       ret.cruiseState.speed = cp.vl["CRUISE"]["CRUISE_SPEED_PCM"] * CV.KPH_TO_MS
 
     if self.CP.flags & HondaFlags.BOSCH_ALT_BRAKE:
+      ret.brakePressed = cp.vl["BRAKE_MODULE"]["BRAKE_PRESSED"] != 0
+    elif self.CP.flags & HondaFlags.BOSCH_ALT_BRAKE_PCM_ACCEL:
       ret.brakePressed = cp.vl["BRAKE_MODULE"]["BRAKE_PRESSED"] != 0
     else:
       # brake switch has shown some single time step noise, so only considered when
