@@ -32,7 +32,7 @@ class CarControllerParams:
   BOSCH_ACCEL_MAX = 2.0  # m/s^2
 
   BOSCH_GAS_LOOKUP_BP = [-0.2, 2.0]  # 2m/s^2
-  BOSCH_GAS_LOOKUP_V = [0, 1600]
+  BOSCH_GAS_LOOKUP_V = [0, 1999]
 
   STEER_STEP = 1  # 100 Hz
   STEER_DELTA_UP = 3  # min/max in 0.33s for all Honda
@@ -181,8 +181,8 @@ class CAR(Platforms):
     flags=HondaFlags.BOSCH_RADARLESS,
   )
   ACURA_RDX_3G = HondaBoschPlatformConfig(
-    [HondaCarDocs("Acura RDX 2019-21", "All", min_steer_speed=3. * CV.MPH_TO_MS)],
-    CarSpecs(mass=4068 * CV.LB_TO_KG, wheelbase=2.75, steerRatio=11.95, centerToFrontRatio=0.41, tireStiffnessFactor=0.677),  # as spec
+    [HondaCarDocs("Acura RDX 2022", "All", min_steer_speed=3. * CV.MPH_TO_MS)],
+    CarSpecs(mass=4079 * CV.LB_TO_KG, wheelbase=2.75, steerRatio=12.00, centerToFrontRatio=0.41, tireStiffnessFactor=0.677),  # as spec
     {Bus.pt: 'acura_rdx_2020_can_generated'},
     flags=HondaFlags.BOSCH_ALT_BRAKE,
   )
