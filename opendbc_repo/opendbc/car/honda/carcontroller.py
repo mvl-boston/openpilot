@@ -2,9 +2,9 @@ import numpy as np
 from collections import namedtuple
 
 from opendbc.can.packer import CANPacker
-from opendbc.car import Bus, DT_CTRL, rate_limit, make_tester_present_msg, structs
+from opendbc.car import Bus, DT_CTRL, rate_limit, make_tester_present_msg, structs, apply_driver_steer_torque_limits
 from opendbc.car.honda import hondacan
-from opendbc.car.honda.values import CruiseButtons, VISUAL_HUD, HONDA_BOSCH, HONDA_BOSCH_RADARLESS, HONDA_NIDEC_ALT_PCM_ACCEL, CarControllerParams
+from opendbc.car.honda.values import CruiseButtons, VISUAL_HUD, HONDA_BOSCH, HONDA_BOSCH_RADARLESS, HONDA_NIDEC_ALT_PCM_ACCEL, CarControllerParams, SERIAL_STEERING, LKAS_LIMITS
 from opendbc.car.interfaces import CarControllerBase
 
 VisualAlert = structs.CarControl.HUDControl.VisualAlert
@@ -97,7 +97,7 @@ HUDData = namedtuple("HUDData",
 
 
 class CarController(CarControllerBase):
-  def __init__(self, dbc_names, CP):
+  def __init__(self, dbc_names, CP, VM):
     super().__init__(dbc_names, CP)
     self.packer = CANPacker(dbc_names[Bus.pt])
     self.params = CarControllerParams(CP)
@@ -115,6 +115,7 @@ class CarController(CarControllerBase):
     self.gas = 0.0
     self.brake = 0.0
     self.last_steer = 0.0
+    self.apply_steer_last = 0.0
 
   def update(self, CC, CS, now_nanos):
     actuators = CC.actuators
@@ -151,6 +152,35 @@ class CarController(CarControllerBase):
     apply_steer = int(np.interp(-limited_steer * self.params.STEER_MAX,
                              self.params.STEER_LOOKUP_BP, self.params.STEER_LOOKUP_V))
 
+    if (CS.CP.carFingerprint in SERIAL_STEERING):
+      apply_steer = apply_driver_steer_torque_limits(apply_steer, self.apply_steer_last, CS.out.steeringTorque, LKAS_LIMITS, ss=True)
+      self.apply_steer_last = apply_steer
+      if apply_steer > 229 and False:
+        apply_steer_orig = apply_steer
+        apply_steer = (apply_steer - 229) * 2 + apply_steer
+        if apply_steer > 240:
+            self.apply_steer_over_max_counter += 1
+            if self.apply_steer_over_max_counter > 3:
+                apply_steer = apply_steer_orig
+                self.apply_steer_over_max_counter = 0
+            else:
+                self.apply_steer_over_max_counter = 0
+      elif apply_steer < -229 and False:
+        apply_steer_orig = apply_steer
+        apply_steer = (apply_steer + 229) * 2 + apply_steer
+        if apply_steer < -240:
+            self.apply_steer_over_max_counter+= 1
+            if self.apply_steer_over_max_counter > 3:
+                apply_steer = apply_steer_orig
+                self.apply_steer_over_max_counter = 0
+            else:
+                self.apply_steer_over_max_counter = 0
+      else:
+        self.apply_steer_over_max_counter = 0
+
+    self.apply_steer_last = apply_steer
+  
+    
     # Send CAN commands
     can_sends = []
 
@@ -163,7 +193,7 @@ class CarController(CarControllerBase):
     can_sends.append(hondacan.create_steering_control(self.packer, self.CAN, apply_steer, CC.latActive))
 
     # wind brake from air resistance decel at high speed
-    wind_brake = np.interp(CS.out.vEgo, [0.0, 2.3, 35.0], [0.001, 0.002, 0.15])
+    wind_brake = 0.001 + 0.00035 * (CS.out.vEgo * CS.out.vEgo)
     # all of this is only relevant for HONDA NIDEC
     max_accel = np.interp(CS.out.vEgo, self.params.NIDEC_MAX_ACCEL_BP, self.params.NIDEC_MAX_ACCEL_V)
     # TODO this 1.44 is just to maintain previous behavior
@@ -179,8 +209,8 @@ class CarController(CarControllerBase):
     elif self.CP.carFingerprint in HONDA_NIDEC_ALT_PCM_ACCEL:
       pcm_speed_V = [0.0,
                      np.clip(CS.out.vEgo - 3.0, 0.0, 100.0),
-                     np.clip(CS.out.vEgo + 0.0, 0.0, 100.0),
-                     np.clip(CS.out.vEgo + 5.0, 0.0, 100.0)]
+                     np.clip(CS.out.vEgo + 1.0, 0.0, 100.0),
+                     np.clip(CS.out.vEgo + 4.0, 0.0, 100.0)]
       pcm_speed = float(np.interp(gas - brake, pcm_speed_BP, pcm_speed_V))
       pcm_accel = int(1.0 * self.params.NIDEC_GAS_MAX)
     else:
