@@ -173,6 +173,12 @@ class CAR(Platforms):
     dbc_dict('acura_rdx_2020_can_generated', None),
     flags=HondaFlags.BOSCH_ALT_BRAKE,
   )
+  HONDA_ODYSSEY_5G_MMR = HondaBoschPlatformConfig(
+    [HondaCarDocs("Honda Odyssey 2021-2025", "All", min_steer_speed=3. * CV.MPH_TO_MS)],
+    CarSpecs(mass=4590 * CV.LB_TO_KG, wheelbase=3.00, steerRatio=13.35, centerToFrontRatio=0.41, tireStiffnessFactor=0.82),  # as spec
+    dbc_dict('acura_rdx_2020_can_generated', None),
+    flags=HondaFlags.BOSCH_ALT_BRAKE,
+  )
   HONDA_INSIGHT = HondaBoschPlatformConfig(
     [HondaCarDocs("Honda Insight 2019-22", "All", min_steer_speed=3. * CV.MPH_TO_MS)],
     CarSpecs(mass=2987 * CV.LB_TO_KG, wheelbase=2.7, steerRatio=15.0, centerToFrontRatio=0.39, tireStiffnessFactor=0.82),  # as spec
