@@ -104,6 +104,7 @@ class CarController(CarControllerBase):
     self.packer = CANPacker(dbc_names[Bus.pt])
     self.params = CarControllerParams(CP)
     self.CAN = hondacan.CanBus(CP)
+    self.frame = 0
 
     self.braking = False
     self.brake_steady = 0.
