@@ -321,10 +321,8 @@ class CarState(CarStateBase):
   def get_can_parsers(self, CP):
     pt_messages = get_can_messages(CP, self.gearbox_msg)
 
-    cam_messages = []
-
     if CP.carFingerprint in SERIAL_STEERING:
-      cam_messages += [
+      cam_messages = [
         ("STEER_MOTOR_TORQUE", 100),
         ("STEER_STATUS", 100)
       ]
