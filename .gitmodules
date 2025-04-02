@@ -16,4 +16,4 @@
 [submodule "opendbc_repo"]
 	path = opendbc_repo
 	url = https://github.com/mvl-boston/opendbc
-	branch = MDX_newlong
+	branch = 25_MDX
