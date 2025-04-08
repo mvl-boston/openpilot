@@ -24,8 +24,8 @@ MIN_STD_SANITY_CHECK = 1e-5  # m or rad
 MAX_FILTER_REWIND_TIME = 0.8  # s
 MAX_SENSOR_TIME_DIFF = 0.1  # s
 YAWRATE_CROSS_ERR_CHECK_FACTOR = 30
-INPUT_INVALID_LIMIT = 2.0 # 1 (camodo) / 9 (sensor) bad input[s] ignored
-INPUT_INVALID_RECOVERY = 10.0 # ~10 secs to resume after exceeding allowed bad inputs by one
+INPUT_INVALID_LIMIT = 10 # was 2.0 # 1 (camodo) / 9 (sensor) bad input[s] ignored
+INPUT_INVALID_RECOVERY = 1 # was 10.0 # ~10 secs to resume after exceeding allowed bad inputs by one
 POSENET_STD_INITIAL_VALUE = 10.0
 POSENET_STD_HIST_HALF = 20
 
