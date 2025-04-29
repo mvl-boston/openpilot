@@ -13,3 +13,7 @@
 [submodule "tinygrad"]
   path = tinygrad_repo
   url = https://github.com/commaai/tinygrad.git
+[submodule "opendbc_repo"]
+	path = opendbc_repo
+	url = https://github.com/mvl-boston/opendbc
+	branch = 25mdx-ldw
