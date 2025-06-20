@@ -145,7 +145,7 @@ class CarController(CarControllerBase):
     self.last_torque = limited_torque
 
     # alt_camera models fault if user and comma both apply torque
-    if CS.out.steeringPressed and self.CP.carFingerprint in (HONDA_BOSCH_ALT_CAMERA):
+    if CS.out.steeringPressed:
       apply_torque = 0
 
     # *** apply brake hysteresis ***
