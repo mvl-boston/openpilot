@@ -111,6 +111,7 @@ class CarController(CarControllerBase):
     self.apply_brake_last = 0
     self.last_pump_ts = 0.
     self.stopping_counter = 0
+    self.steeringTorque_last = 0
 
     self.accel = 0.0
     self.speed = 0.0
@@ -144,10 +145,6 @@ class CarController(CarControllerBase):
                                 self.params.STEER_DELTA_UP * DT_CTRL)
     self.last_torque = limited_torque
 
-    # alt_camera models fault if user and comma both apply torque
-    if CS.out.steeringPressed:
-      apply_torque = 0
-
     # *** apply brake hysteresis ***
     pre_limit_brake, self.braking, self.brake_steady = actuator_hysteresis(brake, self.braking, self.brake_steady,
                                                                            CS.out.vEgo, self.CP.carFingerprint)
@@ -173,7 +170,14 @@ class CarController(CarControllerBase):
         can_sends.append(make_tester_present_msg(0x18DAB0F1, 1, suppress_response=True))
 
     # Send steering command.
-    can_sends.append(hondacan.create_steering_control(self.packer, self.CAN, apply_torque, CC.latActive and not CS.out.steeringPressed))
+    if True: # todo: limit to lowsteer models / disables steering if pressed
+      steerDisable = CS.out.steeringPressed or ( abs ( CS.out.steeringTorque - self.steeringTorque_last ) > 100 )
+      self.steeringTorque_last = CS.out.steeringTorque
+      if steerDisable:
+        self.last_torque = 0
+    else:
+      steerDisable = False
+    can_sends.append(hondacan.create_steering_control(self.packer, self.CAN, apply_torque, CC.latActive and not steerDisable))
 
     # wind brake from air resistance decel at high speed
     wind_brake_ms2 = np.interp(CS.out.vEgo, [0.0, 13.4, 22.4, 31.3, 40.2], [0.000, 0.049, 0.136, 0.267, 0.441]) # in m/s2 units
@@ -272,6 +276,6 @@ class CarController(CarControllerBase):
     new_actuators.brake = self.brake
     new_actuators.torque = self.last_torque
     new_actuators.torqueOutputCan = apply_torque
-
+    
     self.frame += 1
     return new_actuators, can_sends
