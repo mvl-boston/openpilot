@@ -128,7 +128,7 @@ class CarController(CarControllerBase):
     hud_control = CC.hudControl
     conversion = hondacan.get_cruise_speed_conversion(self.CP.carFingerprint, CS.is_metric)
     hud_v_cruise = hud_control.setSpeed / conversion if hud_control.speedVisible else 255
-    hud_control.lanesvisible = CS.out.show_lanelines
+    hud_control.lanes_visible = CS.out.show_lanelines
     pcm_cancel_cmd = CC.cruiseControl.cancel
 
     if len(CC.orientationNED) == 3:
