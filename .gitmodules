@@ -17,3 +17,7 @@
 	path = opendbc_repo
 	url = https://github.com/mvl-boston/opendbc
 	branch = RDX_2022_new
+[submodule "tools/opendbc_repo"]
+	path = tools/opendbc_repo
+	url = https://github.com/mvl-boston/opendbc
+	branch = RDX_2022_new
