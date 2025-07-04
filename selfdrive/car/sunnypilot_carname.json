@@ -1,6 +1,7 @@
 {
   "=== Not Selected ===": "",
   "Acura ILX 2016-19": "ACURA_ILX",
+  "Acura MDX 2025": "ACURA_MDX_4G_MMR",
   "Acura RDX 2016-18": "ACURA_RDX",
   "Acura RDX 2019-22": "ACURA_RDX_3G",
   "Audi A3 2014-19": "AUDI_A3_MK3",
@@ -81,8 +82,9 @@
   "Honda Inspire 2018": "HONDA_ACCORD",
   "Honda Odyssey 2018-20": "HONDA_ODYSSEY",
   "Honda Passport 2019-23": "HONDA_PILOT",
+  "Honda Passport 2026": "HONDA_PASSPORT_4G",
   "Honda Pilot 2016-22": "HONDA_PILOT",
-  "Honda Pilot 2023-24": "HONDA_PILOT_4G",
+  "Honda Pilot 2023-25": "HONDA_PILOT_4G",
   "Honda Ridgeline 2017-24": "HONDA_RIDGELINE",
   "Hyundai Azera 2022": "HYUNDAI_AZERA_6TH_GEN",
   "Hyundai Azera Hybrid 2019": "HYUNDAI_AZERA_HEV_6TH_GEN",
