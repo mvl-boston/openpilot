@@ -8,7 +8,7 @@ from opendbc.can.parser import CANParser
 from openpilot.selfdrive.car.honda.hondacan import CanBus, get_cruise_speed_conversion
 from openpilot.selfdrive.car.honda.values import CAR, DBC, STEER_THRESHOLD, HONDA_BOSCH, \
                                                  HONDA_NIDEC_ALT_SCM_MESSAGES, HONDA_BOSCH_RADARLESS, \
-                                                 HondaFlags, SERIAL_STEERING, GearShifter
+                                                 HONDA_CANFD_CAR, HondaFlags, SERIAL_STEERING, GearShifter
 from openpilot.selfdrive.car.interfaces import CarStateBase
 
 TransmissionType = car.CarParams.TransmissionType
@@ -65,7 +65,7 @@ def get_can_messages(CP, gearbox_msg):
 
   # TODO: clean this up
   if CP.carFingerprint in (CAR.HONDA_ACCORD, CAR.HONDA_CIVIC_BOSCH, CAR.HONDA_CIVIC_BOSCH_DIESEL, CAR.HONDA_CRV_HYBRID, CAR.HONDA_INSIGHT,
-                           CAR.ACURA_RDX_3G, CAR.HONDA_E, CAR.HONDA_CIVIC_2022, CAR.HONDA_HRV_3G, CAR.HONDA_ACCORD_11G, CAR.HONDA_CRV_HYBRID_6G, CAR.HONDA_CRV_6G, CAR.HONDA_PILOT_4G):
+                           CAR.ACURA_RDX_3G, CAR.HONDA_E, CAR.HONDA_CIVIC_2022, CAR.HONDA_HRV_3G, *HONDA_CANFD_CAR):
     pass
   elif CP.carFingerprint in (CAR.HONDA_ODYSSEY_CHN, CAR.HONDA_FREED, CAR.HONDA_HRV):
     pass
@@ -138,7 +138,7 @@ class CarState(CarStateBase):
     ret.standstill = cp.vl["ENGINE_DATA"]["XMISSION_SPEED"] < 1e-5
     # TODO: find a common signal across all cars
     if self.CP.carFingerprint in (CAR.HONDA_ACCORD, CAR.HONDA_CIVIC_BOSCH, CAR.HONDA_CIVIC_BOSCH_DIESEL, CAR.HONDA_CRV_HYBRID, CAR.HONDA_INSIGHT,
-                                  CAR.ACURA_RDX_3G, CAR.HONDA_E, CAR.HONDA_CIVIC_2022, CAR.HONDA_HRV_3G, CAR.HONDA_ACCORD_11G, CAR.HONDA_CRV_HYBRID_6G, CAR.HONDA_CRV_6G, CAR.HONDA_PILOT_4G):
+                                  CAR.ACURA_RDX_3G, CAR.HONDA_E, CAR.HONDA_CIVIC_2022, CAR.HONDA_HRV_3G, *HONDA_CANFD_CAR):
       ret.doorOpen = bool(cp.vl["SCM_FEEDBACK"]["DRIVERS_DOOR_OPEN"])
     elif self.CP.carFingerprint in (CAR.HONDA_ODYSSEY_CHN, CAR.HONDA_FREED, CAR.HONDA_HRV):
       ret.doorOpen = bool(cp.vl["SCM_BUTTONS"]["DRIVERS_DOOR_OPEN"])
