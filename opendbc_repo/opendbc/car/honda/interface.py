@@ -37,7 +37,7 @@ class CarInterface(CarInterfaceBase):
     CAN = CanBus(ret, fingerprint)
 
     # Recent test route is needed to undashcam these cars
-    ret.dashcamOnly = candidate in HONDA_BOSCH_CANFD
+    # ret.dashcamOnly = candidate in HONDA_BOSCH_CANFD
 
     if candidate in HONDA_BOSCH:
       cfgs = [get_safety_config(structs.CarParams.SafetyModel.hondaBosch)]
@@ -223,6 +223,9 @@ class CarInterface(CarInterfaceBase):
     if candidate in HONDA_BOSCH_RADARLESS:
       ret.safetyConfigs[-1].safetyParam |= HondaSafetyFlags.RADARLESS.value
 
+    if candidate in HONDA_BOSCH_CANFD:
+      ret.safetyConfigs[-1].safetyParam |= HondaSafetyFlags.BOSCH_CANFD.value
+
     # min speed to enable ACC. if car can do stop and go, then set enabling speed
     # to a negative value, so it won't matter. Otherwise, add 0.5 mph margin to not
     # conflict with PCM acc
@@ -237,5 +240,5 @@ class CarInterface(CarInterfaceBase):
 
   @staticmethod
   def init(CP, CP_SP, can_recv, can_send):
-    if CP.carFingerprint in (HONDA_BOSCH - HONDA_BOSCH_RADARLESS) and CP.openpilotLongitudinalControl:
+    if CP.carFingerprint in (HONDA_BOSCH - HONDA_BOSCH_RADARLESS - HONDA_BOSCH_CANFD) and CP.openpilotLongitudinalControl:
       disable_ecu(can_recv, can_send, bus=CanBus(CP).pt, addr=0x18DAB0F1, com_cont_req=b'\x28\x83\x03')

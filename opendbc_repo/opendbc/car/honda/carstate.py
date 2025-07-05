@@ -55,6 +55,9 @@ def get_can_messages(CP, gearbox_msg):
   if CP.carFingerprint in (HONDA_BOSCH | {CAR.HONDA_CIVIC, CAR.HONDA_ODYSSEY, CAR.HONDA_ODYSSEY_CHN}):
     messages.append(("EPB_STATUS", 50))
 
+  if CP.carFingerprint in HONDA_BOSCH_CANFD:
+    messages.append(("BRAKE_ERROR", 100))
+
   if CP.carFingerprint in HONDA_BOSCH:
     # these messages are on camera bus on radarless cars
     if not CP.openpilotLongitudinalControl and CP.carFingerprint not in HONDA_BOSCH_RADARLESS:
@@ -62,6 +65,11 @@ def get_can_messages(CP, gearbox_msg):
         ("ACC_HUD", 10),
         ("ACC_CONTROL", 50),
       ]
+  else:  # Nidec signals
+    if CP.carFingerprint == CAR.HONDA_ODYSSEY_CHN:
+      messages.append(("CRUISE_PARAMS", 10))
+    else:
+      messages.append(("CRUISE_PARAMS", 50))
 
   if CP.carFingerprint not in (CAR.HONDA_ACCORD, CAR.HONDA_CIVIC_BOSCH, CAR.HONDA_CIVIC_BOSCH_DIESEL, CAR.HONDA_CRV_HYBRID, CAR.HONDA_INSIGHT,
                                CAR.ACURA_RDX_3G, CAR.HONDA_E, CAR.HONDA_ODYSSEY_CHN, CAR.HONDA_FREED, CAR.HONDA_HRV, *HONDA_BOSCH_RADARLESS,
@@ -153,7 +161,9 @@ class CarState(CarStateBase):
     else:
       # On some cars, these two signals are always 1, this flag is masking a bug in release
       # FIXME: find and set the ACC faulted signals on more platforms
-      if self.CP.openpilotLongitudinalControl:
+      if self.CP.openpilotLongitudinalControl and self.CP.carFingerprint in HONDA_BOSCH_CANFD:
+        ret.accFaulted = bool(cp.vl["BRAKE_ERROR"]["BRAKE_ERROR_1"] or cp.vl["BRAKE_ERROR"]["BRAKE_ERROR_2"])
+      elif self.CP.openpilotLongitudinalControl:
         ret.accFaulted = bool(cp.vl["STANDSTILL"]["BRAKE_ERROR_1"] or cp.vl["STANDSTILL"]["BRAKE_ERROR_2"])
 
       # Log non-critical stock ACC/LKAS faults if Nidec (camera)
