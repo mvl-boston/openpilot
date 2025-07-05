@@ -151,6 +151,12 @@ class CAR(Platforms):
     CarSpecs(mass=3279 * CV.LB_TO_KG, wheelbase=2.83, steerRatio=16.33, centerToFrontRatio=0.39, tireStiffnessFactor=0.8467),
     {Bus.pt: 'honda_accord_2018_can_generated'},
   )
+  HONDA_ACCORD_11G = HondaBoschPlatformConfig(
+    [HondaCarDocs("Honda Accord 2023", "All")],
+    CarSpecs(mass=3279 * CV.LB_TO_KG, wheelbase=2.83, steerRatio=16.33, centerToFrontRatio=0.39, tireStiffnessFactor=0.8467),
+    {Bus.pt: 'honda_pilot_2023_can_generated'},
+    flags=HondaFlags.BOSCH_CANFD,
+  )
   HONDA_CIVIC_BOSCH = HondaBoschPlatformConfig(
     [
       HondaCarDocs("Honda Civic 2019-21", "All", video="https://www.youtube.com/watch?v=4Iz1Mz5LGF8",
@@ -184,11 +190,25 @@ class CAR(Platforms):
     {Bus.pt: 'honda_crv_ex_2017_can_generated', Bus.body: 'honda_crv_ex_2017_body_generated'},
     flags=HondaFlags.BOSCH_ALT_BRAKE,
   )
+  HONDA_CRV_6G = HondaBoschPlatformConfig(
+    [HondaCarDocs("Honda CR-V 2023-25", "All")],
+    # mass: mean of 4 models in kg, steerRatio: 12.3 is spec end-to-end
+    CarSpecs(mass=1667, wheelbase=2.66, steerRatio=16, centerToFrontRatio=0.41, tireStiffnessFactor=0.677),
+    {Bus.pt: 'honda_pilot_2023_can_generated'},
+    flags=HondaFlags.BOSCH_CANFD,
+  )
   HONDA_CRV_HYBRID = HondaBoschPlatformConfig(
     [HondaCarDocs("Honda CR-V Hybrid 2017-22", min_steer_speed=12. * CV.MPH_TO_MS)],
     # mass: mean of 4 models in kg, steerRatio: 12.3 is spec end-to-end
     CarSpecs(mass=1667, wheelbase=2.66, steerRatio=16, centerToFrontRatio=0.41, tireStiffnessFactor=0.677),
     {Bus.pt: 'honda_accord_2018_can_generated'},
+  )
+  HONDA_CRV_HYBRID_6G = HondaBoschPlatformConfig(
+    [HondaCarDocs("Honda CR-V Hybrid 2024", "All")],
+    # mass: mean of 4 models in kg, steerRatio: 12.3 is spec end-to-end
+    CarSpecs(mass=1667, wheelbase=2.66, steerRatio=16, centerToFrontRatio=0.41, tireStiffnessFactor=0.677),
+    {Bus.pt: 'honda_pilot_2023_can_generated'},
+    flags=HondaFlags.BOSCH_CANFD,
   )
   HONDA_HRV_3G = HondaBoschPlatformConfig(
     [HondaCarDocs("Honda HR-V 2023-25", "All")],
