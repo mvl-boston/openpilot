@@ -718,6 +718,7 @@ FW_VERSIONS = {
       b'36802-THR-A220\x00\x00',
     ],
     (Ecu.fwdCamera, 0x18dab5f1, None): [
+      b'36161-THR-A220\x00\x00',
       b'36161-THR-A230\x00\x00',
     ],
     (Ecu.shiftByWire, 0x18da0bf1, None): [
