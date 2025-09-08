@@ -76,7 +76,7 @@ class CarSpecificEvents:
             events.add(EventName.cruiseDisabled)
       if self.CP.minEnableSpeed > 0 and CS.vEgo < 0.001:
         events.add(EventName.manualRestart)
-      
+
       if CS.brakeHoldActive and CS.blockPcmEnable: # set by Nidec Hybrid which cannot resume from brakehold
         events.add(EventName.belowEngageSpeed)
 
