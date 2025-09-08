@@ -78,7 +78,7 @@ class CarSpecificEvents:
         events.add(EventName.manualRestart)
       
       if CS.brakeHoldActive and CS.blockPcmEnable: # set by Nidec Hybrid which cannot resume from brakehold
-        events.add(EventName.speedTooLow)
+        events.add(EventName.belowEngageSpeed)
 
     elif self.CP.brand == 'toyota':
       # TODO: when we check for unexpected disengagement, check gear not S1, S2, S3
