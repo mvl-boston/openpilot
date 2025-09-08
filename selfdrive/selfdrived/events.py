@@ -680,7 +680,7 @@ EVENTS: dict[int, dict[str, Alert | AlertCallbackType]] = {
       Priority.LOW, VisualAlert.none, AudibleAlert.none, .2),
   },
 
-  EventName.brakeHoldGasRequied: {
+  EventName.brakeHoldGasRequired: {
     ET.USER_DISABLE: EngagementAlert(AudibleAlert.disengage),
     ET.NO_ENTRY: NoEntryAlert("Press Gas to Exit Brake Hold"),
   },
