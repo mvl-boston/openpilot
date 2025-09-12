@@ -16,4 +16,4 @@
 [submodule "opendbc_repo"]
 	path = opendbc_repo
 	url = https://github.com/mvl-boston/opendbc
-	branch = RDX_2022_new
+	branch = serialtest-basenopid
