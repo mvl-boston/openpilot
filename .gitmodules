@@ -1,6 +1,3 @@
-[submodule "panda"]
-  path = panda
-  url = ../../commaai/panda.git
 [submodule "msgq"]
   path = msgq_repo
   url = ../../commaai/msgq.git
