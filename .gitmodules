@@ -14,3 +14,7 @@
 	path = opendbc_repo
 	url = https://github.com/mvl-boston/opendbc
 	branch = combined-honda-new
+[submodule "panda"]
+	path = panda
+	url = https://github.com/mvl-boston/panda
+	branch = reset-canfd
