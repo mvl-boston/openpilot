@@ -10,11 +10,11 @@
 [submodule "tinygrad"]
   path = tinygrad_repo
   url = https://github.com/tinygrad/tinygrad.git
-[submodule "opendbc_repo"]
-	path = opendbc_repo
-	url = https://github.com/mvl-boston/opendbc
-	branch = combined-honda-new
 [submodule "panda"]
 	path = panda
 	url = https://github.com/mvl-boston/panda
 	branch = reset-canfd
+[submodule "opendbc_repo"]
+	path = opendbc_repo
+	url = https://github.com/mvl-boston/opendbc
+	branch = combined-honda-new
