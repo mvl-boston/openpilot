@@ -1,9 +1,3 @@
-[submodule "panda"]
-  path = panda
-  url = ../../commaai/panda.git
-[submodule "opendbc"]
-  path = opendbc_repo
-  url = ../../commaai/opendbc.git
 [submodule "msgq"]
   path = msgq_repo
   url = ../../commaai/msgq.git
@@ -16,3 +10,11 @@
 [submodule "tinygrad"]
   path = tinygrad_repo
   url = https://github.com/tinygrad/tinygrad.git
+[submodule "opendbc_repo"]
+	path = opendbc_repo
+	url = https://github.com/mvl-boston/opendbc
+	branch = combined-honda-new
+[submodule "panda"]
+	path = panda
+	url = https://github.com/mvl-boston/panda
+	branch = reset-canfd
