@@ -117,6 +117,19 @@ class LongitudinalPlanner:
       accel_clip = [ACCEL_MIN, get_max_accel(v_ego)]
       steer_angle_without_offset = sm['carState'].steeringAngleDeg - sm['liveParameters'].angleOffsetDeg
       accel_clip = limit_accel_in_turns(v_ego, steer_angle_without_offset, accel_clip, self.CP)
+
+# ------- slowsteer start -----
+
+# latplan = lataccel plan
+# targetlataccel = min (2, 90% lataccelmax)
+# speedreduc = (targetlataccel) / latplan
+# targetspeed= max (speedreduc * myspeed, 10mph)
+# accelinplan = (targetspeed - myspeed) / timeinplan
+# accellimit = min(accelinplan for all records)
+# accel = min (actuatoraccel, accellimt)
+
+# ------- slowsteer end -----
+
     else:
       accel_clip = [ACCEL_MIN, ACCEL_MAX]
 
