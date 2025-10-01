@@ -163,7 +163,7 @@ class SelfdriveD(CruiseHelper):
 
     self.mads = ModularAssistiveDrivingSystem(self)
 
-    self.car_events_sp = CarSpecificEventsSP(self.CP, self.params)
+    self.car_events_sp = CarSpecificEventsSP(self.CP, self.CP_SP)
 
     CruiseHelper.__init__(self, self.CP)
 
