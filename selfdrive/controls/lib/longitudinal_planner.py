@@ -34,16 +34,21 @@ def get_coast_accel(pitch):
   return np.sin(pitch) * -5.65 - 0.3  # fitted from data using xx/projects/allow_throttle/compute_coast_accel.py
 
 
-def limit_accel_in_turns(v_ego, angle_steers, a_target, CP):
+def limit_accel_in_turns(v_ego, angle_steers, a_target, CP, latAccelFactorFiltered):
   """
   This function returns a limited long acceleration allowed, depending on the existing lateral acceleration
   this should avoid accelerating when losing the target in turns
   """
   # FIXME: This function to calculate lateral accel is incorrect and should use the VehicleModel
   # The lookup table for turns should also be updated if we do this
-  a_total_max = np.interp(v_ego, _A_TOTAL_MAX_BP, _A_TOTAL_MAX_V)
+  min_a_target_squared = min([n ** 2 for n in a_target])
+  a_limit_car = math.sqrt(latAccelFactorFiltered ** 2 + min_a_target_squared)
+  a_total_max = min (np.interp(v_ego, _A_TOTAL_MAX_BP, _A_TOTAL_MAX_V), a_limit_car)
   a_y = v_ego ** 2 * angle_steers * CV.DEG_TO_RAD / (CP.steerRatio * CP.wheelbase)
   a_x_allowed = math.sqrt(max(a_total_max ** 2 - a_y ** 2, 0.))
+
+  target_speed = max(4,v_ego * latAccelFactorFiltered / max(abs(a_y),0.1))
+  a_x_allowed = min(max(-1.0, target_speed - v_ego), a_x_allowed)
 
   return [a_target[0], min(a_target[1], a_x_allowed)]
 
@@ -116,7 +121,9 @@ class LongitudinalPlanner:
     if mode == 'acc':
       accel_clip = [ACCEL_MIN, get_max_accel(v_ego)]
       steer_angle_without_offset = sm['carState'].steeringAngleDeg - sm['liveParameters'].angleOffsetDeg
-      accel_clip = limit_accel_in_turns(v_ego, steer_angle_without_offset, accel_clip, self.CP)
+      accel_clip = limit_accel_in_turns(v_ego, steer_angle_without_offset, accel_clip, self.CP,
+#                                        sm['liveTorqueParameters'].latAccelFactorFiltered)
+                                        self.CP.maxLateralAccel)
     else:
       accel_clip = [ACCEL_MIN, ACCEL_MAX]
 
