@@ -45,7 +45,7 @@ HardwareState = namedtuple("HardwareState", ['network_type', 'network_info', 'ne
 THERMAL_BANDS = OrderedDict({
   ThermalStatus.green: ThermalBand(None, 56.0),
   ThermalStatus.yellow: ThermalBand(52.5, 67.2),
-  ThermalStatus.red: ThermalBand(61.6, 74.9.),
+  ThermalStatus.red: ThermalBand(61.6, 74.9),
   ThermalStatus.danger: ThermalBand(65.8, None),
 })
 
