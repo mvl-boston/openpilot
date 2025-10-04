@@ -1,12 +1,22 @@
-Version 0.9.9 (2025-05-15)
+Version 0.10.0 (2025-07-07)
 ========================
 * New driving model
-  * New training architecture supervised by MLSIM
-* Steering actuator delay is now learned online
+  * Lead car ground-truth fixes
+  * Ported over VAE from the MLSIM stack
+  * New training architecture described in CVPR paper
+* Enable live-learned steering actuation delay
+* Opt-in audio recording for dashcam video
+
+Version 0.9.9 (2025-05-23)
+========================
+* New driving model
+  * New training architecture using parts from MLSIM
+* Steering actuation delay is now learned online
+* Ford Escape 2023-24 support thanks to incognitojam!
+* Ford Kuga 2024 support thanks to incognitojam!
+* Hyundai Nexo 2021 support thanks to sunnyhaibin!
 * Tesla Model 3 and Y support thanks to lukasloetkolben!
-* Coming soon
-  * New Honda models
-  * Bigger vision model
+* Lexus RC 2023 support thanks to nelsonjchen!
 
 Version 0.9.8 (2025-02-28)
 ========================
