@@ -41,7 +41,8 @@ def limit_accel_in_turns(v_ego, angle_steers, a_target, CP, latAccelFactorFilter
   """
   # FIXME: This function to calculate lateral accel is incorrect and should use the VehicleModel
   # The lookup table for turns should also be updated if we do this
-  a_limit_car = math.sqrt(latAccelFactorFiltered ** 2 + min(abs(a_target)) ** 2)
+  min_a_target_squared = min([n ** 2 for n in a_target])
+  a_limit_car = math.sqrt(latAccelFactorFiltered ** 2 + min_a_target_squared)
   a_total_max = min (np.interp(v_ego, _A_TOTAL_MAX_BP, _A_TOTAL_MAX_V), a_limit_car)
   a_y = v_ego ** 2 * angle_steers * CV.DEG_TO_RAD / (CP.steerRatio * CP.wheelbase)
   a_x_allowed = math.sqrt(max(a_total_max ** 2 - a_y ** 2, 0.))
