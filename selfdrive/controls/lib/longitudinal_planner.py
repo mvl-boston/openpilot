@@ -47,6 +47,9 @@ def limit_accel_in_turns(v_ego, angle_steers, a_target, CP, latAccelFactorFilter
   a_y = v_ego ** 2 * angle_steers * CV.DEG_TO_RAD / (CP.steerRatio * CP.wheelbase)
   a_x_allowed = math.sqrt(max(a_total_max ** 2 - a_y ** 2, 0.))
 
+  target_speed = max(4,v_ego * latAccelFactorFiltered / max(abs(a_y),0.1))
+  a_x_allowed = min(max(-1.0, target_speed - v_ego), a_x_allowed)
+
   return [a_target[0], min(a_target[1], a_x_allowed)]
 
 
