@@ -118,7 +118,8 @@ class LongitudinalPlanner:
       accel_clip = [ACCEL_MIN, get_max_accel(v_ego)]
       steer_angle_without_offset = sm['carState'].steeringAngleDeg - sm['liveParameters'].angleOffsetDeg
       accel_clip = limit_accel_in_turns(v_ego, steer_angle_without_offset, accel_clip, self.CP,
-                                        sm['liveTorqueParameters'].latAccelFactorFiltered)
+#                                        sm['liveTorqueParameters'].latAccelFactorFiltered)
+                                        self.CP.maxLateralAccel)
     else:
       accel_clip = [ACCEL_MIN, ACCEL_MAX]
 
