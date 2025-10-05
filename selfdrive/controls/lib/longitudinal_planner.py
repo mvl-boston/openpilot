@@ -131,7 +131,8 @@ class LongitudinalPlanner:
     modelAccels = sm['modelV2'].acceleration
     max_speed = np.clip(v_ego *  np.sqrt(self.CP.maxLateralAccel / np.clip(np.abs(modelAccels.y), 0.1, None))), 4, None)
     max_accel = np.clip((max_speed - v_ego) / np.clip(modelAccels.t, 0.1, None),ACCEL_MIN,None)
-    accel_clip = np.clip(accel_clip, ACCEL_MIN, min(max_accel))
+    if not sm['carState'].steeringPressed:
+      accel_clip = np.clip(accel_clip, ACCEL_MIN, min(max_accel))
     
     if reset_state:
       self.v_desired_filter.x = v_ego
