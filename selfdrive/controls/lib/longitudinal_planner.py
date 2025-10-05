@@ -14,7 +14,6 @@ from openpilot.selfdrive.controls.lib.longitudinal_mpc_lib.long_mpc import T_IDX
 from openpilot.selfdrive.controls.lib.drive_helpers import CONTROL_N, get_accel_from_plan
 from openpilot.selfdrive.car.cruise import V_CRUISE_MAX, V_CRUISE_UNSET
 from openpilot.common.swaglog import cloudlog
-from opendbc.car.carlog import carlog
 
 LON_MPC_STEP = 0.2  # first step is 0.2s
 A_CRUISE_MAX_VALS = [1.6, 1.2, 0.8, 0.6]
@@ -121,16 +120,6 @@ class LongitudinalPlanner:
     else:
       accel_clip = [ACCEL_MIN, ACCEL_MAX]
 
-    # drop speed to stay within maxLateralAccel
-    if not sm['carState'].steeringPressed and len(sm['modelV2'].acceleration.y):
-      modelAccels = sm['modelV2'].acceleration
-      modelSpeeds = sm['modelV2'].velocity
-      modelTimes = [n - modelAccels.t[0] for n in modelAccels.t]
-      max_speed = np.clip(modelSpeeds.x *  np.sqrt(self.CP.maxLateralAccel / np.clip(np.abs(modelAccels.y), 0.1, None)), 4.0, None)
-      max_accel = np.clip((max_speed - v_ego) / np.clip(modelTimes, 0.1, None),ACCEL_MIN,None)
-      accel_clip = np.clip(accel_clip, ACCEL_MIN, min(max_accel))
-      carlog.error({"max_speed": max_speed, "max_accel": max_accel, "accel_clip": accel_clip})
-
     if reset_state:
       self.v_desired_filter.x = v_ego
       # Clip aEgo to cruise limits to prevent large accelerations when becoming active
@@ -180,6 +169,15 @@ class LongitudinalPlanner:
     else:
       output_a_target = min(output_a_target_mpc, output_a_target_e2e)
       self.output_should_stop = output_should_stop_e2e or output_should_stop_mpc
+
+    # drop speed to stay within maxLateralAccel
+    if not sm['carState'].steeringPressed and len(sm['modelV2'].acceleration.y):
+      modelAccels = sm['modelV2'].acceleration
+      modelSpeeds = sm['modelV2'].velocity
+      modelTimes = [n - modelAccels.t[0] for n in modelAccels.t]
+      max_speed = np.clip(modelSpeeds.x *  np.sqrt(self.CP.maxLateralAccel / np.clip(np.abs(modelAccels.y), 0.1, None)), 4.0, None)
+      max_accel = np.clip((max_speed - v_ego) / np.clip(modelTimes, 0.1, None),ACCEL_MIN,None)
+      output_a_target = min(output_a_target, min(max_accel))
 
     for idx in range(2):
       accel_clip[idx] = np.clip(accel_clip[idx], self.prev_accel_clip[idx] - 0.05, self.prev_accel_clip[idx] + 0.05)
