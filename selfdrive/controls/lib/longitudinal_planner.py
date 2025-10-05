@@ -128,7 +128,7 @@ class LongitudinalPlanner:
       accel_clip = [ACCEL_MIN, ACCEL_MAX]
 
     # drop speed to stay within maxLateralAccel
-    max_speed = np.clip(v_ego_now *  self.CP.maxLateralAccel / np.clip(np.abs(lataccelplan), 0.1, None)), 4, None)
+    max_speed = np.clip(v_ego_now *  np.sqrt(self.CP.maxLateralAccel / np.clip(np.abs(lataccelplan), 0.1, None))), 4, None)
     max_accel = np.clip((max_speed - v_ego_now) / np.clip(time, 0.1, None),ACCEL_MIN,None)
     accel_clip = np.clip(accel_clip, ACCEL_MIN, min(max_accel))
     
