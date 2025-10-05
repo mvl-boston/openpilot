@@ -133,7 +133,7 @@ class LongitudinalPlanner:
       self.a_desired = np.clip(sm['carState'].aEgo, accel_clip[0], accel_clip[1])
 
     # drop speed to stay within maxLateralAccel
-    if not sm['carState'].steeringPressed:
+    if not sm['carState'].steeringPressed and len(sm['modelV2'].acceleration):
       modelAccels = sm['modelV2'].acceleration
       modelSpeeds = sm['modelV2'].velocity
       max_speed = np.clip(modelSpeeds.x *  np.sqrt(self.CP.maxLateralAccel / np.clip(np.abs(modelAccels.y), 0.1, None)), 4.0, None)
