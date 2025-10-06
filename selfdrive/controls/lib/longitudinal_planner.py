@@ -180,7 +180,7 @@ class LongitudinalPlanner:
       max_speed = np.clip(modelSpeeds.x *  np.sqrt(0.9 * modelAccels.y[0] / currentTorque / np.clip(np.abs(modelAccels.y), 1e-3, None)), 4.0, None)
       max_accel = np.clip((max_speed - v_ego) / np.clip(modelTimes, 0.1, None),ACCEL_MIN,None)
       output_a_target = min(output_a_target, min(max_accel))
-      carlog.error({"output_a_target_after": output_a_target})
+      carlog.error({"y0": modelAccels.y[0], "currentTorque": currentTorque, "all_accel": modelAccels.y, "output_a_target_after": output_a_target})
 
     for idx in range(2):
       accel_clip[idx] = np.clip(accel_clip[idx], self.prev_accel_clip[idx] - 0.05, self.prev_accel_clip[idx] + 0.05)
