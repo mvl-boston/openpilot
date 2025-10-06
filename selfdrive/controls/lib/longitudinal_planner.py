@@ -176,7 +176,8 @@ class LongitudinalPlanner:
       modelAccels = sm['modelV2'].acceleration
       modelSpeeds = sm['modelV2'].velocity
       modelTimes = [n - modelAccels.t[0] for n in modelAccels.t]
-      max_speed = np.clip(modelSpeeds.x *  np.sqrt(self.CP.maxLateralAccel / np.clip(np.abs(modelAccels.y), 0.1, None)), 4.0, None)
+      currentTorque = max(abs(sm['carControl'].actuators.torque),0.1)
+      max_speed = np.clip(modelSpeeds.x *  np.sqrt(modelAccels.y[0] / currentTorque / np.clip(np.abs(modelAccels.y), 0.1, None)), 4.0, None)
       max_accel = np.clip((max_speed - v_ego) / np.clip(modelTimes, 0.1, None),ACCEL_MIN,None)
       output_a_target = min(output_a_target, min(max_accel))
       carlog.error({"output_a_target_after": output_a_target})
