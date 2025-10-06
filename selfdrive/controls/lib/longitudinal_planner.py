@@ -187,7 +187,6 @@ class LongitudinalPlanner:
     self.output_a_target = np.clip(output_a_target, accel_clip[0], accel_clip[1])
     self.prev_accel_clip = accel_clip
     carlog.error({"self_output_a_target": self.output_a_target})
-    
 
   def publish(self, sm, pm):
     plan_send = messaging.new_message('longitudinalPlan')
