@@ -178,15 +178,15 @@ class LongitudinalPlanner:
       modelTimes = [n - modelAccels.t[0] for n in modelAccels.t]
       max_speed = np.clip(modelSpeeds.x *  np.sqrt(self.CP.maxLateralAccel / np.clip(np.abs(modelAccels.y), 0.1, None)), 4.0, None)
       max_accel = np.clip((max_speed - v_ego) / np.clip(modelTimes, 0.1, None),ACCEL_MIN,None)
-      carlog.error({"output_a_target_before": output_a_target})
       output_a_target = min(output_a_target, min(max_accel))
-      carlog.error({"curr_speed":v_ego, "max_speed": max_speed, "max_accel": max_accel, "output_a_target_after": output_a_target})
+      carlog.error({"output_a_target_after": output_a_target})
 
     for idx in range(2):
       accel_clip[idx] = np.clip(accel_clip[idx], self.prev_accel_clip[idx] - 0.05, self.prev_accel_clip[idx] + 0.05)
     self.output_a_target = np.clip(output_a_target, accel_clip[0], accel_clip[1])
     self.prev_accel_clip = accel_clip
-#    carlog.error({"self_output_a_target": self.output_a_target})
+    if self.output_a_target < -3.0:
+      carlog.error({"self_output_a_target": self.output_a_target})
 
   def publish(self, sm, pm):
     plan_send = messaging.new_message('longitudinalPlan')
@@ -207,6 +207,11 @@ class LongitudinalPlanner:
     longitudinalPlan.fcw = self.fcw
 
     longitudinalPlan.aTarget = float(self.output_a_target)
+    if self.output_a_target < -3.0:
+      carlog.error({"publish_self_output_a_target": self.output_a_target})
+    if longitudinalPlan.aTarget < -3.0:
+      carlog.error({"publish_longPlan_aTarget": longitudinalPlan.aTarget})
+    
     longitudinalPlan.shouldStop = bool(self.output_should_stop)
     longitudinalPlan.allowBrake = True
     longitudinalPlan.allowThrottle = bool(self.allow_throttle)
