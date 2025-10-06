@@ -211,7 +211,7 @@ class LongitudinalPlanner:
       carlog.error({"publish_self_output_a_target": self.output_a_target})
     if longitudinalPlan.aTarget < -3.0:
       carlog.error({"publish_longPlan_aTarget": longitudinalPlan.aTarget})
-    
+
     longitudinalPlan.shouldStop = bool(self.output_should_stop)
     longitudinalPlan.allowBrake = True
     longitudinalPlan.allowThrottle = bool(self.allow_throttle)
