@@ -14,6 +14,7 @@ from openpilot.selfdrive.controls.lib.longitudinal_mpc_lib.long_mpc import T_IDX
 from openpilot.selfdrive.controls.lib.drive_helpers import CONTROL_N, get_accel_from_plan
 from openpilot.selfdrive.car.cruise import V_CRUISE_MAX, V_CRUISE_UNSET
 from openpilot.common.swaglog import cloudlog
+from opendbc.car.carlog import carlog
 
 LON_MPC_STEP = 0.2  # first step is 0.2s
 A_CRUISE_MAX_VALS = [1.6, 1.2, 0.8, 0.6]
@@ -177,12 +178,16 @@ class LongitudinalPlanner:
       modelTimes = [n - modelAccels.t[0] for n in modelAccels.t]
       max_speed = np.clip(modelSpeeds.x *  np.sqrt(self.CP.maxLateralAccel / np.clip(np.abs(modelAccels.y), 0.1, None)), 4.0, None)
       max_accel = np.clip((max_speed - v_ego) / np.clip(modelTimes, 0.1, None),ACCEL_MIN,None)
+      carlog.error({"output_a_target_before": output_a_target})
       output_a_target = min(output_a_target, min(max_accel))
+      carlog.error({"max_speed": max_speed, "max_accel": max_accel, "output_a_target_after": output_a_target})
 
     for idx in range(2):
       accel_clip[idx] = np.clip(accel_clip[idx], self.prev_accel_clip[idx] - 0.05, self.prev_accel_clip[idx] + 0.05)
     self.output_a_target = np.clip(output_a_target, accel_clip[0], accel_clip[1])
     self.prev_accel_clip = accel_clip
+    carlog.error({"self_output_a_target": self.output_a_target})
+    
 
   def publish(self, sm, pm):
     plan_send = messaging.new_message('longitudinalPlan')
