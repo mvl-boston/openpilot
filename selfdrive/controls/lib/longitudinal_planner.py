@@ -180,13 +180,13 @@ class LongitudinalPlanner:
       max_accel = np.clip((max_speed - v_ego) / np.clip(modelTimes, 0.1, None),ACCEL_MIN,None)
       carlog.error({"output_a_target_before": output_a_target})
       output_a_target = min(output_a_target, min(max_accel))
-      carlog.error({"max_speed": max_speed, "max_accel": max_accel, "output_a_target_after": output_a_target})
+      carlog.error({"curr_speed":v_ego, "max_speed": max_speed, "max_accel": max_accel, "output_a_target_after": output_a_target})
 
     for idx in range(2):
       accel_clip[idx] = np.clip(accel_clip[idx], self.prev_accel_clip[idx] - 0.05, self.prev_accel_clip[idx] + 0.05)
     self.output_a_target = np.clip(output_a_target, accel_clip[0], accel_clip[1])
     self.prev_accel_clip = accel_clip
-    carlog.error({"self_output_a_target": self.output_a_target})
+#    carlog.error({"self_output_a_target": self.output_a_target})
 
   def publish(self, sm, pm):
     plan_send = messaging.new_message('longitudinalPlan')
