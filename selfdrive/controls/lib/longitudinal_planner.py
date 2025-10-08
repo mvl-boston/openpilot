@@ -172,7 +172,8 @@ class LongitudinalPlanner:
       self.output_should_stop = output_should_stop_e2e or output_should_stop_mpc
 
     # drop speed to stay within maxLateralAccel
-    if not sm['carState'].steeringPressed and len(sm['modelV2'].acceleration.y):
+#    if not sm['carState'].steeringPressed and len(sm['modelV2'].acceleration.y):
+    if len(sm['modelV2'].acceleration.y):
       modelAccels = sm['modelV2'].acceleration
       modelSpeeds = sm['modelV2'].velocity
       modelTimes = [n - modelAccels.t[0] for n in modelAccels.t]
