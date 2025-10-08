@@ -14,6 +14,7 @@ from openpilot.selfdrive.controls.lib.longitudinal_mpc_lib.long_mpc import T_IDX
 from openpilot.selfdrive.controls.lib.drive_helpers import CONTROL_N, get_accel_from_plan
 from openpilot.selfdrive.car.cruise import V_CRUISE_MAX, V_CRUISE_UNSET
 from openpilot.common.swaglog import cloudlog
+from opendbc.car.carlog import carlog
 
 LON_MPC_STEP = 0.2  # first step is 0.2s
 A_CRUISE_MAX_VALS = [1.6, 1.2, 0.8, 0.6]
@@ -170,10 +171,26 @@ class LongitudinalPlanner:
       output_a_target = min(output_a_target_mpc, output_a_target_e2e)
       self.output_should_stop = output_should_stop_e2e or output_should_stop_mpc
 
+    # drop speed to stay within maxLateralAccel
+#    if not sm['carState'].steeringPressed and len(sm['modelV2'].acceleration.y):
+    if len(sm['modelV2'].acceleration.y):
+      modelAccels = sm['modelV2'].acceleration
+      modelSpeeds = sm['modelV2'].velocity
+      modelTimes = [n - modelAccels.t[0] for n in modelAccels.t]
+      currentTorque = max(abs(sm['carControl'].actuators.torque),1e-3)
+      # max_speed = np.clip(modelSpeeds.x *  np.sqrt(0.9 * modelAccels.y[0] / currentTorque / np.clip(np.abs(modelAccels.y), 1e-3, None)), 4.0, None)
+      max_speed = np.clip(modelSpeeds.x *  (0.9 * abs(modelAccels.y[0]) / currentTorque / np.clip(np.abs(modelAccels.y), 1e-3, None)), 4.0, None)
+      max_accel = np.clip((max_speed - v_ego) / np.clip(modelTimes, 0.1, None),ACCEL_MIN,None)
+      output_a_target = min(output_a_target, min(max_accel))
+      carlog.error({"y0": modelAccels.y[0], "currentTorque": currentTorque, "all_y_accel": modelAccels.y})
+      carlog.error({"max_speed": max_speed, "max_accel": max_accel, "output_a_target_after": output_a_target})
+
     for idx in range(2):
       accel_clip[idx] = np.clip(accel_clip[idx], self.prev_accel_clip[idx] - 0.05, self.prev_accel_clip[idx] + 0.05)
     self.output_a_target = np.clip(output_a_target, accel_clip[0], accel_clip[1])
     self.prev_accel_clip = accel_clip
+    if self.output_a_target < -3.0:
+      carlog.error({"self_output_a_target": self.output_a_target})
 
   def publish(self, sm, pm):
     plan_send = messaging.new_message('longitudinalPlan')
@@ -194,6 +211,11 @@ class LongitudinalPlanner:
     longitudinalPlan.fcw = self.fcw
 
     longitudinalPlan.aTarget = float(self.output_a_target)
+    if self.output_a_target < -3.0:
+      carlog.error({"publish_self_output_a_target": self.output_a_target})
+    if longitudinalPlan.aTarget < -3.0:
+      carlog.error({"publish_longPlan_aTarget": longitudinalPlan.aTarget})
+
     longitudinalPlan.shouldStop = bool(self.output_should_stop)
     longitudinalPlan.allowBrake = True
     longitudinalPlan.allowThrottle = bool(self.allow_throttle)
