@@ -374,7 +374,8 @@ def hardware_thread(end_event, hw_queue) -> None:
       startup_blocked_ts = None
     else:
       if onroad_conditions["ignition"] and (startup_conditions != startup_conditions_prev):
-        cloudlog.event("Startup blocked", startup_conditions=startup_conditions, onroad_conditions=onroad_conditions, error=True)
+        cloudlog.event("Startup blocked", startup_conditions=startup_conditions, startup_conditions_prev=startup_conditions_prev, \
+                       onroad_conditions=onroad_conditions, error=True)
         startup_conditions_prev = startup_conditions.copy()
         startup_blocked_ts = time.monotonic()
 
