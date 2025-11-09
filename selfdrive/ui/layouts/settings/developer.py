@@ -120,7 +120,8 @@ class DeveloperLayout(Widget):
       else:
         self._alpha_long_toggle.set_visible(True)
 
-      long_man_enabled = ui_state.has_longitudinal_control and ui_state.is_offroad()
+      # long_man_enabled = ui_state.has_longitudinal_control and ui_state.is_offroad()
+      long_man_enabled = True
       self._long_maneuver_toggle.action_item.set_enabled(long_man_enabled)
       if not long_man_enabled:
         self._long_maneuver_toggle.action_item.set_state(False)
