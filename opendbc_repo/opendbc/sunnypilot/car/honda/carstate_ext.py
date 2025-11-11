@@ -9,6 +9,8 @@ from enum import StrEnum
 from opendbc.car import Bus, structs
 from opendbc.can.parser import CANParser
 from opendbc.sunnypilot.car.honda.values_ext import HondaFlagsSP
+from opendbc.car.common.conversions import Conversions as CV
+from opendbc.car.carlog import carlog
 
 
 class CarStateExt:
@@ -16,9 +18,14 @@ class CarStateExt:
     self.CP = CP
     self.CP_SP = CP_SP
 
-  def update(self, ret: structs.CarState, can_parsers: dict[StrEnum, CANParser]) -> None:
+  def update(self, ret: structs.CarState, ret_sp: structs.CarStateSP, can_parsers: dict[StrEnum, CANParser]) -> None:
     cp = can_parsers[Bus.pt]
     cp_cam = can_parsers[Bus.cam]
+
+    speed_limit = cp_cam.vl["CAMERA_MESSAGES"]["SPEED_LIMIT_SIGN"]
+    ret_sp.speedlimit = (speed_limit - 96.0) * 5.0 * CV.MPH_TO_MS if (speed_limit > 96 and speed_limit < 125) else 0.0
+
+    carlog.error({"speed_limit": speed_limit, "speedlimit": ret_sp.speedlimit})
 
     if self.CP_SP.flags & HondaFlagsSP.CLARITY:
       ret.accFaulted = bool(cp.vl["HYBRID_BRAKE_ERROR"]["BRAKE_ERROR_1"] or cp.vl["HYBRID_BRAKE_ERROR"]["BRAKE_ERROR_2"])
