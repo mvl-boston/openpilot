@@ -1,81 +1,78 @@
 import pyray as rl
+from openpilot.system.ui.lib.application import FontWeight
+from openpilot.system.ui.lib.multilang import tr
+from openpilot.system.ui.widgets import Widget, DialogResult
+from openpilot.system.ui.widgets.button import Button, ButtonStyle
+from openpilot.system.ui.widgets.label import gui_label
+from openpilot.system.ui.widgets.scroller import Scroller
 
-from openpilot.system.ui.lib.button import gui_button, ButtonStyle, TextAlignment
-from openpilot.system.ui.lib.label import gui_label
-from openpilot.system.ui.lib.scroll_panel import GuiScrollPanel
-
-
-class MultiOptionDialog:
-  def __init__(self, title, options, current=""):
-    self._title = title
-    self._options = options
-    self._current = current if current in options else ""
-    self._selection = self._current
-    self._option_height = 80
-    self._padding = 20
-    self.scroll_panel = GuiScrollPanel()
-
-  @property
-  def selection(self):
-    return self._selection
-
-  def render(self, rect):
-    title_rect = rl.Rectangle(rect.x + self._padding, rect.y + self._padding, rect.width - 2 * self._padding, 70)
-    gui_label(title_rect, self._title, 70)
-
-    options_y_start = rect.y + 120
-    options_height = len(self._options) * (self._option_height + 10)
-    options_rect = rl.Rectangle(rect.x + self._padding, options_y_start, rect.width - 2 * self._padding, options_height)
-
-    view_rect = rl.Rectangle(
-      rect.x + self._padding, options_y_start, rect.width - 2 * self._padding, rect.height - 200 - 2 * self._padding
-    )
-
-    offset = self.scroll_panel.handle_scroll(view_rect, options_rect)
-    is_click_valid = self.scroll_panel.is_click_valid()
-
-    rl.begin_scissor_mode(int(view_rect.x), int(view_rect.y), int(view_rect.width), int(view_rect.height))
-
-    for i, option in enumerate(self._options):
-      y_pos = view_rect.y + i * (self._option_height + 10) + offset.y
-      item_rect = rl.Rectangle(view_rect.x, y_pos, view_rect.width, self._option_height)
-
-      if not rl.check_collision_recs(item_rect, view_rect):
-        continue
-
-      is_selected = option == self._selection
-      button_style = ButtonStyle.PRIMARY if is_selected else ButtonStyle.NORMAL
-
-      if gui_button(item_rect, option, button_style=button_style, text_alignment=TextAlignment.LEFT) and is_click_valid:
-        self._selection = option
-
-    rl.end_scissor_mode()
-
-    button_y = rect.y + rect.height - 80 - self._padding
-    button_width = (rect.width - 3 * self._padding) / 2
-
-    cancel_rect = rl.Rectangle(rect.x + self._padding, button_y, button_width, 80)
-    if gui_button(cancel_rect, "Cancel"):
-      return 0  # Canceled
-
-    select_rect = rl.Rectangle(rect.x + 2 * self._padding + button_width, button_y, button_width, 80)
-    has_new_selection = self._selection != "" and self._selection != self._current
-
-    if gui_button(select_rect, "Select", is_enabled=has_new_selection, button_style=ButtonStyle.PRIMARY):
-      return 1  # Selected
-
-    return -1  # Still active
+# Constants
+MARGIN = 50
+TITLE_FONT_SIZE = 70
+ITEM_HEIGHT = 135
+BUTTON_SPACING = 50
+BUTTON_HEIGHT = 160
+ITEM_SPACING = 50
+LIST_ITEM_SPACING = 25
 
 
-if __name__ == "__main__":
-  from openpilot.system.ui.lib.application import gui_app
+class MultiOptionDialog(Widget):
+  def __init__(self, title, options, current="", option_font_weight=FontWeight.MEDIUM):
+    super().__init__()
+    self.title = title
+    self.options = options
+    self.current = current
+    self.selection = current
+    self._result: DialogResult = DialogResult.NO_ACTION
 
-  gui_app.init_window("Multi Option Dialog Example")
-  options = [f"Option {i}" for i in range(1, 11)]
-  dialog = MultiOptionDialog("Choose an option", options, options[0])
+    # Create scroller with option buttons
+    self.option_buttons = [Button(option, click_callback=lambda opt=option: self._on_option_clicked(opt),
+                                  font_weight=option_font_weight,
+                                  text_alignment=rl.GuiTextAlignment.TEXT_ALIGN_LEFT, button_style=ButtonStyle.NORMAL,
+                                  text_padding=50, elide_right=True) for option in options]
+    self.scroller = Scroller(self.option_buttons, spacing=LIST_ITEM_SPACING)
 
-  for _ in gui_app.render():
-    result = dialog.render(rl.Rectangle(100, 100, 1024, 800))
-    if result >= 0:
-      print(f"Selected: {dialog.selection}" if result > 0 else "Canceled")
-      break
+    self.cancel_button = Button(lambda: tr("Cancel"), click_callback=lambda: self._set_result(DialogResult.CANCEL))
+    self.select_button = Button(lambda: tr("Select"), click_callback=lambda: self._set_result(DialogResult.CONFIRM), button_style=ButtonStyle.PRIMARY)
+
+  def _set_result(self, result: DialogResult):
+    self._result = result
+
+  def _on_option_clicked(self, option):
+    self.selection = option
+
+  def _render(self, rect):
+    dialog_rect = rl.Rectangle(rect.x + MARGIN, rect.y + MARGIN, rect.width - 2 * MARGIN, rect.height - 2 * MARGIN)
+    rl.draw_rectangle_rounded(dialog_rect, 0.02, 20, rl.Color(30, 30, 30, 255))
+
+    content_rect = rl.Rectangle(dialog_rect.x + MARGIN, dialog_rect.y + MARGIN,
+                                dialog_rect.width - 2 * MARGIN, dialog_rect.height - 2 * MARGIN)
+
+    gui_label(rl.Rectangle(content_rect.x, content_rect.y, content_rect.width, TITLE_FONT_SIZE), self.title, 70, font_weight=FontWeight.BOLD)
+
+    # Options area
+    options_y = content_rect.y + TITLE_FONT_SIZE + ITEM_SPACING
+    options_h = content_rect.height - TITLE_FONT_SIZE - BUTTON_HEIGHT - 2 * ITEM_SPACING
+    options_rect = rl.Rectangle(content_rect.x, options_y, content_rect.width, options_h)
+
+    # Update button styles and set width based on selection
+    for i, option in enumerate(self.options):
+      selected = option == self.selection
+      button = self.option_buttons[i]
+      button.set_button_style(ButtonStyle.PRIMARY if selected else ButtonStyle.NORMAL)
+      button.set_rect(rl.Rectangle(0, 0, options_rect.width, ITEM_HEIGHT))
+
+    self.scroller.render(options_rect)
+
+    # Buttons
+    button_y = content_rect.y + content_rect.height - BUTTON_HEIGHT
+    button_w = (content_rect.width - BUTTON_SPACING) / 2
+
+    cancel_rect = rl.Rectangle(content_rect.x, button_y, button_w, BUTTON_HEIGHT)
+    self.cancel_button.render(cancel_rect)
+
+    select_rect = rl.Rectangle(content_rect.x + button_w + BUTTON_SPACING, button_y, button_w, BUTTON_HEIGHT)
+    self.select_button.set_enabled(self.selection != self.current)
+    self.select_button.render(select_rect)
+
+    return self._result

@@ -1,20 +1,15 @@
 #!/usr/bin/env python3
 import os
 from openpilot.system.hardware import TICI
+os.environ['DEV'] = 'QCOM' if TICI else 'CPU'
 from tinygrad.tensor import Tensor
 from tinygrad.dtype import dtypes
-if TICI:
-  from openpilot.selfdrive.modeld.runners.tinygrad_helpers import qcom_tensor_from_opencl_address
-  os.environ['QCOM'] = '1'
-else:
-  os.environ['LLVM'] = '1'
 import math
 import time
 import pickle
 import ctypes
 import numpy as np
 from pathlib import Path
-from setproctitle import setproctitle
 
 from cereal import messaging
 from cereal.messaging import PubMaster, SubMaster
@@ -25,18 +20,18 @@ from openpilot.common.transformations.model import dmonitoringmodel_intrinsics, 
 from openpilot.common.transformations.camera import _ar_ox_fisheye, _os_fisheye
 from openpilot.selfdrive.modeld.models.commonmodel_pyx import CLContext, MonitoringModelFrame
 from openpilot.selfdrive.modeld.parse_model_outputs import sigmoid
-from openpilot.system import sentry
+from openpilot.selfdrive.modeld.runners.tinygrad_helpers import qcom_tensor_from_opencl_address
 
 MODEL_WIDTH, MODEL_HEIGHT = DM_INPUT_SIZE
 CALIB_LEN = 3
 FEATURE_LEN = 512
-OUTPUT_SIZE = 84 + FEATURE_LEN
+OUTPUT_SIZE = 83 + FEATURE_LEN
 
 PROCESS_NAME = "selfdrive.modeld.dmonitoringmodeld"
 SEND_RAW_PRED = os.getenv('SEND_RAW_PRED')
 MODEL_PKL_PATH = Path(__file__).parent / 'models/dmonitoring_model_tinygrad.pkl'
 
-
+# TODO: slice from meta
 class DriverStateResult(ctypes.Structure):
   _fields_ = [
     ("face_orientation", ctypes.c_float*3),
@@ -51,8 +46,8 @@ class DriverStateResult(ctypes.Structure):
     ("left_blink_prob", ctypes.c_float),
     ("right_blink_prob", ctypes.c_float),
     ("sunglasses_prob", ctypes.c_float),
-    ("occluded_prob", ctypes.c_float),
-    ("ready_prob", ctypes.c_float*4),
+    ("_unused_c", ctypes.c_float),
+    ("_unused_d", ctypes.c_float*4),
     ("not_ready_prob", ctypes.c_float*2)]
 
 
@@ -60,7 +55,6 @@ class DMonitoringModelResult(ctypes.Structure):
   _fields_ = [
     ("driver_state_lhd", DriverStateResult),
     ("driver_state_rhd", DriverStateResult),
-    ("poor_vision_prob", ctypes.c_float),
     ("wheel_on_right_prob", ctypes.c_float),
     ("features", ctypes.c_float*FEATURE_LEN)]
 
@@ -95,7 +89,7 @@ class ModelState:
       self.tensor_inputs['input_img'] = Tensor(self.frame.buffer_from_cl(input_img_cl).reshape((1, MODEL_WIDTH*MODEL_HEIGHT)), dtype=dtypes.uint8).realize()
 
 
-    output = self.model_run(**self.tensor_inputs).numpy().flatten()
+    output = self.model_run(**self.tensor_inputs).contiguous().realize().uop.base.buffer.numpy()
 
     t2 = time.perf_counter()
     return output, t2 - t1
@@ -112,8 +106,6 @@ def fill_driver_state(msg, ds_result: DriverStateResult):
   msg.leftBlinkProb = float(sigmoid(ds_result.left_blink_prob))
   msg.rightBlinkProb = float(sigmoid(ds_result.right_blink_prob))
   msg.sunglassesProb = float(sigmoid(ds_result.sunglasses_prob))
-  msg.occludedProb = float(sigmoid(ds_result.occluded_prob))
-  msg.readyProb = [float(sigmoid(x)) for x in ds_result.ready_prob]
   msg.notReadyProb = [float(sigmoid(x)) for x in ds_result.not_ready_prob]
 
 
@@ -124,7 +116,6 @@ def get_driverstate_packet(model_output: np.ndarray, frame_id: int, location_ts:
   ds.frameId = frame_id
   ds.modelExecutionTime = execution_time
   ds.gpuExecutionTime = gpu_execution_time
-  ds.poorVisionProb = float(sigmoid(model_result.poor_vision_prob))
   ds.wheelOnRightProb = float(sigmoid(model_result.wheel_on_right_prob))
   ds.rawPredictions = model_output.tobytes() if SEND_RAW_PRED else b''
   fill_driver_state(ds.leftDriverData, model_result.driver_state_lhd)
@@ -133,11 +124,7 @@ def get_driverstate_packet(model_output: np.ndarray, frame_id: int, location_ts:
 
 
 def main():
-  setproctitle(PROCESS_NAME)
   config_realtime_process(7, 5)
-
-  sentry.set_tag("daemon", PROCESS_NAME)
-  cloudlog.bind(daemon=PROCESS_NAME)
 
   cl_context = CLContext()
   model = ModelState(cl_context)
@@ -180,7 +167,4 @@ if __name__ == "__main__":
   try:
     main()
   except KeyboardInterrupt:
-    cloudlog.warning(f"child {PROCESS_NAME} got SIGINT")
-  except Exception:
-    sentry.capture_exception()
-    raise
+    cloudlog.warning("got SIGINT")

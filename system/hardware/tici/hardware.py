@@ -1,8 +1,8 @@
-import json
 import math
 import os
 import subprocess
 import time
+import tempfile
 from enum import IntEnum
 from functools import cached_property, lru_cache
 from pathlib import Path
@@ -115,6 +115,26 @@ class Tici(HardwareBase):
 
   def get_serial(self):
     return self.get_cmdline()['androidboot.serialno']
+
+  def get_voltage(self):
+    with open("/sys/class/hwmon/hwmon1/in1_input") as f:
+      return int(f.read())
+
+  def get_current(self):
+    with open("/sys/class/hwmon/hwmon1/curr1_input") as f:
+      return int(f.read())
+
+  def set_ir_power(self, percent: int):
+    if self.get_device_type() in ("tici", "tizi"):
+      return
+
+    value = int((percent / 100) * 300)
+    with open("/sys/class/leds/led:switch_2/brightness", "w") as f:
+      f.write("0\n")
+    with open("/sys/class/leds/led:torch_2/brightness", "w") as f:
+      f.write(f"{value}\n")
+    with open("/sys/class/leds/led:switch_2/brightness", "w") as f:
+      f.write(f"{value}\n")
 
   def get_network_type(self):
     try:
@@ -290,15 +310,6 @@ class Tici(HardwareBase):
     except Exception:
       return []
 
-  def get_nvme_temperatures(self):
-    ret = []
-    try:
-      out = subprocess.check_output("sudo smartctl -aj /dev/nvme0", shell=True)
-      dat = json.loads(out)
-      ret = list(map(int, dat["nvme_smart_health_information_log"]["temperature_sensors"]))
-    except Exception:
-      pass
-    return ret
 
   def get_current_power_draw(self):
     return (self.read_param_file("/sys/class/hwmon/hwmon1/power1_input", int) / 1e6)
@@ -414,8 +425,8 @@ class Tici(HardwareBase):
 
     # *** GPU config ***
     # https://github.com/commaai/agnos-kernel-sdm845/blob/master/arch/arm64/boot/dts/qcom/sdm845-gpu.dtsi#L216
-    sudo_write("0", "/sys/class/kgsl/kgsl-3d0/min_pwrlevel")
-    sudo_write("0", "/sys/class/kgsl/kgsl-3d0/max_pwrlevel")
+    sudo_write("1", "/sys/class/kgsl/kgsl-3d0/min_pwrlevel")
+    sudo_write("1", "/sys/class/kgsl/kgsl-3d0/max_pwrlevel")
     sudo_write("1", "/sys/class/kgsl/kgsl-3d0/force_bus_on")
     sudo_write("1", "/sys/class/kgsl/kgsl-3d0/force_clk_on")
     sudo_write("1", "/sys/class/kgsl/kgsl-3d0/force_rail_on")
@@ -434,9 +445,6 @@ class Tici(HardwareBase):
 
     # pandad core
     affine_irq(3, "spi_geni")         # SPI
-    if "tici" in self.get_device_type():
-      affine_irq(3, "xhci-hcd:usb3")  # aux panda USB (or potentially anything else on USB)
-      affine_irq(3, "xhci-hcd:usb1")  # internal panda USB (also modem)
     try:
       pid = subprocess.check_output(["pgrep", "-f", "spi0"], encoding='utf8').strip()
       subprocess.call(["sudo", "chrt", "-f", "-p", "1", pid])
@@ -455,22 +463,20 @@ class Tici(HardwareBase):
 
     cmds = []
 
-    if self.get_device_type() in ("tici", "tizi"):
+    if self.get_device_type() in ("tizi", ):
       # clear out old blue prime initial APN
       os.system('mmcli -m any --3gpp-set-initial-eps-bearer-settings="apn="')
 
       cmds += [
+        # SIM hot swap
+        'AT+QSIMDET=1,0',
+        'AT+QSIMSTAT=1',
+
         # configure modem as data-centric
         'AT+QNVW=5280,0,"0102000000000000"',
         'AT+QNVFW="/nv/item_files/ims/IMS_enable",00',
         'AT+QNVFW="/nv/item_files/modem/mmode/ue_usage_setting",01',
       ]
-      if self.get_device_type() == "tizi":
-        # SIM hot swap, not routed on tici
-        cmds += [
-          'AT+QSIMDET=1,0',
-          'AT+QSIMSTAT=1',
-        ]
     elif manufacturer == 'Cavli Inc.':
       cmds += [
         'AT^SIMSWAP=1',     # use SIM slot, instead of internal eSIM
@@ -499,11 +505,18 @@ class Tici(HardwareBase):
       except Exception:
         pass
 
-    # we use the lte connection built into AGNOS. cleanup esim connection if it exists
+    # eSIM prime
     dest = "/etc/NetworkManager/system-connections/esim.nmconnection"
-    if os.path.exists(dest):
-      os.system(f"sudo nmcli con delete {dest}")
-      self.reboot_modem()
+    if self.get_sim_lpa().is_comma_profile(sim_id) and not os.path.exists(dest):
+      with open(Path(__file__).parent/'esim.nmconnection') as f, tempfile.NamedTemporaryFile(mode='w') as tf:
+        dat = f.read()
+        dat = dat.replace("sim-id=", f"sim-id={sim_id}")
+        tf.write(dat)
+        tf.flush()
+
+        # needs to be root
+        os.system(f"sudo cp {tf.name} {dest}")
+      os.system(f"sudo nmcli con load {dest}")
 
   def reboot_modem(self):
     modem = self.get_modem()

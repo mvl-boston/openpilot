@@ -1,3 +1,36 @@
+Version 0.10.2 (2025-11-23)
+========================
+
+Version 0.10.1 (2025-09-08)
+========================
+* New driving model #36276
+  * World Model: removed global localization inputs
+  * World Model: 2x the number of parameters
+  * World Model: trained on 4x the number of segments
+  * VAE Compression Model: new architecture and training objective
+  * Driving Vision Model: trained on 4x the number of segments
+* New Driver Monitoring model #36198
+* Acura TLX 2021 support thanks to MVL!
+* Honda City 2023 support thanks to vanillagorillaa and drFritz!
+* Honda N-Box 2018 support thanks to miettal!
+* Honda Odyssey 2021-25 support thanks to csouers and MVL!
+* Honda Passport 2026 support thanks to vanillagorillaa and MVL!
+
+Version 0.10.0 (2025-08-05)
+========================
+* New driving model
+  * New training architecture
+     * Described in our CVPR paper: "Learning to Drive from a World Model"
+     * Longitudinal MPC replaced by E2E planning from World Model in Experimental Mode
+     * Action from lateral MPC as training objective replaced by E2E planning from World Model
+  * Low-speed lead car ground-truth fixes
+* Enable live-learned steering actuation delay
+* Opt-in audio recording for dashcam video
+* Acura MDX 2025 support thanks to vanillagorillaa and MVL!
+* Honda Accord 2023-25 support thanks to vanillagorillaa and MVL!
+* Honda CR-V 2023-25 support thanks to vanillagorillaa and MVL!
+* Honda Pilot 2023-25 support thanks to vanillagorillaa and MVL!
+
 Version 0.9.9 (2025-05-23)
 ========================
 * New driving model

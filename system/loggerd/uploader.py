@@ -12,7 +12,7 @@ from collections.abc import Iterator
 from cereal import log
 import cereal.messaging as messaging
 from openpilot.common.api import Api
-from openpilot.common.file_helpers import get_upload_stream
+from openpilot.common.utils import get_upload_stream
 from openpilot.common.params import Params
 from openpilot.common.realtime import set_core_affinity
 from openpilot.system.hardware.hw import Paths
@@ -29,7 +29,7 @@ MAX_UPLOAD_SIZES = {
   "qcam": 5*1e6,
 }
 
-allow_sleep = bool(os.getenv("UPLOADER_SLEEP", "1"))
+allow_sleep = bool(int(os.getenv("UPLOADER_SLEEP", "1")))
 force_wifi = os.getenv("FORCEWIFI") is not None
 fake_upload = os.getenv("FAKEUPLOAD") is not None
 
@@ -88,7 +88,7 @@ class Uploader:
     self.immediate_priority = {"qlog": 0, "qlog.zst": 0, "qcamera.ts": 1}
 
   def list_upload_files(self, metered: bool) -> Iterator[tuple[str, str, str]]:
-    r = self.params.get("AthenadRecentlyViewedRoutes", encoding="utf8")
+    r = self.params.get("AthenadRecentlyViewedRoutes")
     requested_routes = [] if r is None else [route for route in r.split(",") if route]
 
     for logdir in listdir_by_creation(self.root):
@@ -238,7 +238,7 @@ def main(exit_event: threading.Event = None) -> None:
   clear_locks(Paths.log_root())
 
   params = Params()
-  dongle_id = params.get("DongleId", encoding='utf8')
+  dongle_id = params.get("DongleId")
 
   if dongle_id is None:
     cloudlog.info("uploader missing dongle_id")
