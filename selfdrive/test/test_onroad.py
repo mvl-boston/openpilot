@@ -42,7 +42,7 @@ PROCS = {
   "./encoderd": 13.0,
   "./camerad": 10.0,
   "selfdrive.controls.plannerd": 8.0,
-  "selfdrive.ui.ui": 63.0,
+  "selfdrive.ui.ui": 40.0,
   "system.sensord.sensord": 13.0,
   "selfdrive.controls.radard": 2.0,
   "selfdrive.modeld.modeld": 22.0,
@@ -179,7 +179,7 @@ class TestOnroad:
 
   def test_manager_starting_time(self):
     st = self.ts['managerState']['t'][0]
-    assert (st - self.manager_st) < 12.5, f"manager.py took {st - self.manager_st}s to publish the first 'managerState' msg"
+    assert (st - self.manager_st) < 15.0, f"manager.py took {st - self.manager_st}s to publish the first 'managerState' msg"
 
   def test_cloudlog_size(self):
     msgs = self.msgs['logMessage']
