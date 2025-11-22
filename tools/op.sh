@@ -231,7 +231,7 @@ function op_setup() {
 
   echo "Getting git submodules..."
   st="$(date +%s)"
-  if ! git submodule update --filter=blob:none --jobs 4 --init --recursive; then
+  if ! git submodule update --jobs 4 --init --recursive; then
     echo -e " ↳ [${RED}✗${NC}] Getting git submodules failed!"
     loge "ERROR_GIT_SUBMODULES"
     return 1
@@ -284,7 +284,12 @@ function op_venv() {
 
 function op_adb() {
   op_before_cmd
-  op_run_command tools/scripts/adb_ssh.sh
+  op_run_command tools/scripts/adb_ssh.sh "$@"
+}
+
+function op_ssh() {
+  op_before_cmd
+  op_run_command tools/scripts/ssh.py "$@"
 }
 
 function op_check() {
@@ -360,9 +365,12 @@ function op_switch() {
   fi
   BRANCH="$1"
 
+  git config --replace-all remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*"
+  git submodule deinit --all --force
   git fetch "$REMOTE" "$BRANCH"
   git checkout -f FETCH_HEAD
   git checkout -B "$BRANCH" --track "$REMOTE"/"$BRANCH"
+  git submodule deinit --all --force
   git reset --hard "${REMOTE}/${BRANCH}"
   git clean -df
   git submodule update --init --recursive
@@ -412,6 +420,7 @@ function op_default() {
   echo -e "  ${BOLD}cabana${NC}       Run Cabana"
   echo -e "  ${BOLD}clip${NC}         Run clip (linux only)"
   echo -e "  ${BOLD}adb${NC}          Run adb shell"
+  echo -e "  ${BOLD}ssh${NC}          comma prime SSH helper"
   echo ""
   echo -e "${BOLD}${UNDERLINE}Commands [Testing]:${NC}"
   echo -e "  ${BOLD}sim${NC}          Run openpilot in a simulator"
@@ -471,6 +480,7 @@ function _op() {
     restart )       shift 1; op_restart "$@" ;;
     post-commit )   shift 1; op_install_post_commit "$@" ;;
     adb )           shift 1; op_adb "$@" ;;
+    ssh )           shift 1; op_ssh "$@" ;;
     * ) op_default "$@" ;;
   esac
 }

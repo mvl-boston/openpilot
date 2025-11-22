@@ -45,7 +45,7 @@ ChartView::ChartView(const std::pair<double, double> &x_range, ChartsWidget *par
   createToolButtons();
   setRubberBand(QChartView::HorizontalRubberBand);
   setMouseTracking(true);
-  setTheme(settings.theme == DARK_THEME ? QChart::QChart::ChartThemeDark : QChart::ChartThemeLight);
+  setTheme(utils::isDarkTheme() ? QChart::QChart::ChartThemeDark : QChart::ChartThemeLight);
   signal_value_font.setPointSize(9);
 
   QObject::connect(axis_y, &QValueAxis::rangeChanged, this, &ChartView::resetChartCache);
@@ -324,7 +324,8 @@ void ChartView::updateSeries(const cabana::Signal *sig, const MessageEventsMap *
       if (!can->liveStreaming()) {
         s.segment_tree.build(s.vals);
       }
-      s.series->replace(QVector<QPointF>::fromStdVector(series_type == SeriesType::StepLine ? s.step_vals : s.vals));
+      const auto &points = series_type == SeriesType::StepLine ? s.step_vals : s.vals;
+      s.series->replace(QVector<QPointF>(points.cbegin(), points.cend()));
     }
   }
   updateAxisY();
@@ -382,7 +383,7 @@ void ChartView::updateAxisY() {
     QFontMetrics fm(axis_y->labelsFont());
     for (int i = 0; i < tick_count; i++) {
       qreal value = min_y + (i * (max_y - min_y) / (tick_count - 1));
-      max_label_width = std::max(max_label_width, fm.width(QString::number(value, 'f', n)));
+      max_label_width = std::max(max_label_width, fm.horizontalAdvance(QString::number(value, 'f', n)));
     }
 
     int title_spacing = unit.isEmpty() ? 0 : QFontMetrics(axis_y->titleFont()).size(Qt::TextSingleLine, unit).height();
@@ -747,7 +748,7 @@ void ChartView::drawTimeline(QPainter *painter) {
   QRectF time_str_rect(QPointF(x - time_str_size.width() / 2.0, plot_area.bottom() + AXIS_X_TOP_MARGIN), time_str_size);
   QPainterPath path;
   path.addRoundedRect(time_str_rect, 3, 3);
-  painter->fillPath(path, settings.theme == DARK_THEME ? Qt::darkGray : Qt::gray);
+  painter->fillPath(path, utils::isDarkTheme() ? Qt::darkGray : Qt::gray);
   painter->setPen(palette().color(QPalette::BrightText));
   painter->setFont(axis_x->labelsFont());
   painter->drawText(time_str_rect, Qt::AlignCenter, time_str);
@@ -838,7 +839,8 @@ void ChartView::setSeriesType(SeriesType type) {
     }
     for (auto &s : sigs) {
       s.series = createSeries(series_type, s.sig->color);
-      s.series->replace(QVector<QPointF>::fromStdVector(series_type == SeriesType::StepLine ? s.step_vals : s.vals));
+      const auto &points = series_type == SeriesType::StepLine ? s.step_vals : s.vals;
+      s.series->replace(QVector<QPointF>(points.cbegin(), points.cend()));
     }
     updateSeriesPoints();
     updateTitle();
