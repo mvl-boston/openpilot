@@ -3,20 +3,17 @@ import numpy as np
 import pyray as rl
 from cereal import messaging, car
 from dataclasses import dataclass, field
+from openpilot.common.filter_simple import FirstOrderFilter
 from openpilot.common.params import Params
-from openpilot.selfdrive.ui.ui_state import ui_state
-from openpilot.system.ui.lib.application import DEFAULT_FPS
-from openpilot.system.ui.lib.shader_polygon import draw_polygon
 from openpilot.selfdrive.locationd.calibrationd import HEIGHT_INIT
-
+from openpilot.selfdrive.ui.ui_state import ui_state
+from openpilot.system.ui.lib.application import gui_app
+from openpilot.system.ui.lib.shader_polygon import draw_polygon, Gradient
+from openpilot.system.ui.widgets import Widget
 
 CLIP_MARGIN = 500
 MIN_DRAW_DISTANCE = 10.0
 MAX_DRAW_DISTANCE = 100.0
-PATH_COLOR_TRANSITION_DURATION = 0.5  # Seconds for color transition animation
-PATH_BLEND_INCREMENT = 1.0 / (PATH_COLOR_TRANSITION_DURATION * DEFAULT_FPS)
-
-MAX_POINTS = 200
 
 THROTTLE_COLORS = [
   rl.Color(13, 248, 122, 102),   # HSLF(148/360, 0.94, 0.51, 0.4)
@@ -36,6 +33,7 @@ class ModelPoints:
   raw_points: np.ndarray = field(default_factory=lambda: np.empty((0, 3), dtype=np.float32))
   projected_points: np.ndarray = field(default_factory=lambda: np.empty((0, 2), dtype=np.float32))
 
+
 @dataclass
 class LeadVehicle:
   glow: list[float] = field(default_factory=list)
@@ -43,11 +41,12 @@ class LeadVehicle:
   fill_alpha: int = 0
 
 
-class ModelRenderer:
+class ModelRenderer(Widget):
   def __init__(self):
+    super().__init__()
     self._longitudinal_control = False
     self._experimental_mode = False
-    self._blend_factor = 1.0
+    self._blend_filter = FirstOrderFilter(1.0, 0.25, 1 / gui_app.target_fps)
     self._prev_allow_throttle = True
     self._lane_line_probs = np.zeros(4, dtype=np.float32)
     self._road_edge_stds = np.zeros(2, dtype=np.float32)
@@ -64,18 +63,13 @@ class ModelRenderer:
     self._car_space_transform = np.zeros((3, 3), dtype=np.float32)
     self._transform_dirty = True
     self._clip_region = None
-    self._rect = None
 
-    # Pre-allocated arrays for polygon conversion
-    self._temp_points_3d = np.empty((MAX_POINTS * 2, 3), dtype=np.float32)
-    self._temp_proj = np.empty((3, MAX_POINTS * 2), dtype=np.float32)
-
-    self._exp_gradient = {
-      'start': (0.0, 1.0),  # Bottom of path
-      'end': (0.0, 0.0),  # Top of path
-      'colors': [],
-      'stops': [],
-    }
+    self._exp_gradient = Gradient(
+      start=(0.0, 1.0),  # Bottom of path
+      end=(0.0, 0.0),  # Top of path
+      colors=[],
+      stops=[],
+    )
 
     # Get longitudinal control setting from car parameters
     if car_params := Params().get("CarParams"):
@@ -86,14 +80,15 @@ class ModelRenderer:
     self._car_space_transform = transform.astype(np.float32)
     self._transform_dirty = True
 
-  def draw(self, rect: rl.Rectangle, sm: messaging.SubMaster):
+  def _render(self, rect: rl.Rectangle):
+    sm = ui_state.sm
+
     # Check if data is up-to-date
     if (sm.recv_frame["liveCalibration"] < ui_state.started_frame or
         sm.recv_frame["modelV2"] < ui_state.started_frame):
       return
 
     # Set up clipping region
-    self._rect = rect
     self._clip_region = rl.Rectangle(
       rect.x - CLIP_MARGIN, rect.y - CLIP_MARGIN, rect.width + 2 * CLIP_MARGIN, rect.height + 2 * CLIP_MARGIN
     )
@@ -126,7 +121,6 @@ class ModelRenderer:
       if render_lead_indicator:
         self._update_leads(radar_state, path_x_array)
       self._transform_dirty = False
-
 
     # Draw elements
     self._draw_lane_lines()
@@ -173,12 +167,12 @@ class ModelRenderer:
     # Update lane lines using raw points
     for i, lane_line in enumerate(self._lane_lines):
       lane_line.projected_points = self._map_line_to_polygon(
-        lane_line.raw_points, 0.025 * self._lane_line_probs[i], 0.0, max_idx
+        lane_line.raw_points, 0.025 * self._lane_line_probs[i], 0.0, max_idx, max_distance
       )
 
     # Update road edges using raw points
     for road_edge in self._road_edges:
-      road_edge.projected_points = self._map_line_to_polygon(road_edge.raw_points, 0.025, 0.0, max_idx)
+      road_edge.projected_points = self._map_line_to_polygon(road_edge.raw_points, 0.025, 0.0, max_idx, max_distance)
 
     # Update path using raw points
     if lead and lead.status:
@@ -187,12 +181,12 @@ class ModelRenderer:
 
     max_idx = self._get_path_length_idx(path_x_array, max_distance)
     self._path.projected_points = self._map_line_to_polygon(
-      self._path.raw_points, 0.9, self._path_offset_z, max_idx, allow_invert=False
+      self._path.raw_points, 0.9, self._path_offset_z, max_idx, max_distance, allow_invert=False
     )
 
-    self._update_experimental_gradient(self._rect.height)
+    self._update_experimental_gradient()
 
-  def _update_experimental_gradient(self, height):
+  def _update_experimental_gradient(self):
     """Pre-calculate experimental mode gradient colors"""
     if not self._experimental_mode:
       return
@@ -204,22 +198,21 @@ class ModelRenderer:
 
     i = 0
     while i < max_len:
-      track_idx = max_len - i - 1  # flip idx to start from bottom right
-      track_y = self._path.projected_points[track_idx][1]
-      if track_y < 0 or track_y > height:
+      # Some points (screen space) are out of frame (rect space)
+      track_y = self._path.projected_points[i][1]
+      if track_y < self._rect.y or track_y > (self._rect.y + self._rect.height):
         i += 1
         continue
 
-      # Calculate color based on acceleration
-      lin_grad_point = (height - track_y) / height
+      # Calculate color based on acceleration (0 is bottom, 1 is top)
+      lin_grad_point = 1 - (track_y - self._rect.y) / self._rect.height
 
       # speed up: 120, slow down: 0
-      path_hue = max(min(60 + self._acceleration_x[i] * 35, 120), 0)
-      path_hue = int(path_hue * 100 + 0.5) / 100
+      path_hue = np.clip(60 + self._acceleration_x[i] * 35, 0, 120)
 
       saturation = min(abs(self._acceleration_x[i] * 1.5), 1)
-      lightness = self._map_val(saturation, 0.0, 1.0, 0.95, 0.62)
-      alpha = self._map_val(lin_grad_point, 0.75 / 2.0, 0.75, 0.4, 0.0)
+      lightness = np.interp(saturation, [0.0, 1.0], [0.95, 0.62])
+      alpha = np.interp(lin_grad_point, [0.75 / 2.0, 0.75], [0.4, 0.0])
 
       # Use HSL to RGB conversion
       color = self._hsla_to_color(path_hue / 360.0, saturation, lightness, alpha)
@@ -231,8 +224,12 @@ class ModelRenderer:
       i += 1 + (1 if (i + 2) < max_len else 0)
 
     # Store the gradient in the path object
-    self._exp_gradient['colors'] = segment_colors
-    self._exp_gradient['stops'] = gradient_stops
+    self._exp_gradient = Gradient(
+      start=(0.0, 1.0),  # Bottom of path
+      end=(0.0, 0.0),  # Top of path
+      colors=segment_colors,
+      stops=gradient_stops,
+    )
 
   def _update_lead_vehicle(self, d_rel, v_rel, point, rect):
     speed_buff, lead_buff = 10.0, 40.0
@@ -256,7 +253,7 @@ class ModelRenderer:
     glow = [(x + (sz * 1.35) + g_xo, y + sz + g_yo), (x, y - g_yo), (x - (sz * 1.35) - g_xo, y + sz + g_yo)]
     chevron = [(x + (sz * 1.25), y + sz), (x, y), (x - (sz * 1.25), y + sz)]
 
-    return LeadVehicle(glow=glow,chevron=chevron, fill_alpha=int(fill_alpha))
+    return LeadVehicle(glow=glow, chevron=chevron, fill_alpha=int(fill_alpha))
 
   def _draw_lane_lines(self):
     """Draw lane lines and road edges"""
@@ -281,36 +278,25 @@ class ModelRenderer:
     if not self._path.projected_points.size:
       return
 
+    allow_throttle = sm['longitudinalPlan'].allowThrottle or not self._longitudinal_control
+    self._blend_filter.update(int(allow_throttle))
+
     if self._experimental_mode:
       # Draw with acceleration coloring
-      if len(self._exp_gradient['colors']) > 2:
+      if len(self._exp_gradient.colors) > 1:
         draw_polygon(self._rect, self._path.projected_points, gradient=self._exp_gradient)
       else:
         draw_polygon(self._rect, self._path.projected_points, rl.Color(255, 255, 255, 30))
     else:
-      # Draw with throttle/no throttle gradient
-      allow_throttle = sm['longitudinalPlan'].allowThrottle or not self._longitudinal_control
-
-      # Start transition if throttle state changes
-      if allow_throttle != self._prev_allow_throttle:
-        self._prev_allow_throttle = allow_throttle
-        self._blend_factor = max(1.0 - self._blend_factor, 0.0)
-
-      # Update blend factor
-      if self._blend_factor < 1.0:
-        self._blend_factor = min(self._blend_factor + PATH_BLEND_INCREMENT, 1.0)
-
-      begin_colors = NO_THROTTLE_COLORS if allow_throttle else THROTTLE_COLORS
-      end_colors = THROTTLE_COLORS if allow_throttle else NO_THROTTLE_COLORS
-
-      # Blend colors based on transition
-      blended_colors = self._blend_colors(begin_colors, end_colors, self._blend_factor)
-      gradient = {
-        'start': (0.0, 1.0),  # Bottom of path
-        'end': (0.0, 0.0),  # Top of path
-        'colors': blended_colors,
-        'stops': [0.0, 0.5, 1.0],
-      }
+      # Blend throttle/no throttle colors based on transition
+      blend_factor = round(self._blend_filter.x * 100) / 100
+      blended_colors = self._blend_colors(NO_THROTTLE_COLORS, THROTTLE_COLORS, blend_factor)
+      gradient = Gradient(
+        start=(0.0, 1.0),  # Bottom of path
+        end=(0.0, 0.0),  # Top of path
+        colors=blended_colors,
+        stops=[0.0, 0.5, 1.0],
+      )
       draw_polygon(self._rect, self._path.projected_points, gradient=gradient)
 
   def _draw_lead_indicator(self):
@@ -323,11 +309,11 @@ class ModelRenderer:
       rl.draw_triangle_fan(lead.chevron, len(lead.chevron), rl.Color(201, 34, 49, lead.fill_alpha))
 
   @staticmethod
-  def _get_path_length_idx(pos_x_array: np.ndarray, path_height: float) -> int:
-    """Get the index corresponding to the given path height"""
+  def _get_path_length_idx(pos_x_array: np.ndarray, path_distance: float) -> int:
+    """Get the index corresponding to the given path distance"""
     if len(pos_x_array) == 0:
       return 0
-    indices = np.where(pos_x_array <= path_height)[0]
+    indices = np.where(pos_x_array <= path_distance)[0]
     return indices[-1] if indices.size > 0 else 0
 
   def _map_to_screen(self, in_x, in_y, in_z):
@@ -346,81 +332,91 @@ class ModelRenderer:
 
     return (x, y)
 
-  def _map_line_to_polygon(self, line: np.ndarray, y_off: float, z_off: float, max_idx: int, allow_invert: bool = True) -> np.ndarray:
+  def _map_line_to_polygon(self, line: np.ndarray, y_off: float, z_off: float, max_idx: int, max_distance: float, allow_invert: bool = True) -> np.ndarray:
     """Convert 3D line to 2D polygon for rendering."""
     if line.shape[0] == 0:
       return np.empty((0, 2), dtype=np.float32)
 
     # Slice points and filter non-negative x-coordinates
     points = line[:max_idx + 1]
+
+    # Interpolate around max_idx so path end is smooth (max_distance is always >= p0.x)
+    if 0 < max_idx < line.shape[0] - 1:
+      p0 = line[max_idx]
+      p1 = line[max_idx + 1]
+      x0, x1 = p0[0], p1[0]
+      interp_y = np.interp(max_distance, [x0, x1], [p0[1], p1[1]])
+      interp_z = np.interp(max_distance, [x0, x1], [p0[2], p1[2]])
+      interp_point = np.array([max_distance, interp_y, interp_z], dtype=points.dtype)
+      points = np.concatenate((points, interp_point[None, :]), axis=0)
+
     points = points[points[:, 0] >= 0]
     if points.shape[0] == 0:
       return np.empty((0, 2), dtype=np.float32)
 
-    # Create left and right 3D points in one array
-    n_points = points.shape[0]
-    points_3d = self._temp_points_3d[:n_points * 2]
-    points_3d[:n_points, 0] = points_3d[n_points:, 0] = points[:, 0]
-    points_3d[:n_points, 1] = points[:, 1] - y_off
-    points_3d[n_points:, 1] = points[:, 1] + y_off
-    points_3d[:n_points, 2] = points_3d[n_points:, 2] = points[:, 2] + z_off
+    N = points.shape[0]
+    # Generate left and right 3D points in one array using broadcasting
+    offsets = np.array([[0, -y_off, z_off], [0, y_off, z_off]], dtype=np.float32)
+    points_3d = points[None, :, :] + offsets[:, None, :]  # Shape: 2xNx3
+    points_3d = points_3d.reshape(2 * N, 3)  # Shape: (2*N)x3
 
-    # Single matrix multiplication for projections
-    proj = np.ascontiguousarray(self._temp_proj[:, :n_points * 2])  # Slice the pre-allocated array
-    np.dot(self._car_space_transform, points_3d.T, out=proj)
-    valid_z = np.abs(proj[2]) > 1e-6
-    if not np.any(valid_z):
+    # Transform all points to projected space in one operation
+    proj = self._car_space_transform @ points_3d.T  # Shape: 3x(2*N)
+    proj = proj.reshape(3, 2, N)
+    left_proj = proj[:, 0, :]
+    right_proj = proj[:, 1, :]
+
+    # Filter points where z is sufficiently large
+    valid_proj = (np.abs(left_proj[2]) >= 1e-6) & (np.abs(right_proj[2]) >= 1e-6)
+    if not np.any(valid_proj):
       return np.empty((0, 2), dtype=np.float32)
 
     # Compute screen coordinates
-    screen = proj[:2, valid_z] / proj[2, valid_z][None, :]
-    left_screen = screen[:, :n_points].T
-    right_screen = screen[:, n_points:].T
+    left_screen = left_proj[:2, valid_proj] / left_proj[2, valid_proj][None, :]
+    right_screen = right_proj[:2, valid_proj] / right_proj[2, valid_proj][None, :]
 
-    # Ensure consistent shapes by re-aligning valid points
-    valid_points = np.minimum(left_screen.shape[0], right_screen.shape[0])
-    if valid_points == 0:
+    # Define clip region bounds
+    clip = self._clip_region
+    x_min, x_max = clip.x, clip.x + clip.width
+    y_min, y_max = clip.y, clip.y + clip.height
+
+    # Filter points within clip region
+    left_in_clip = (
+      (left_screen[0] >= x_min) & (left_screen[0] <= x_max) &
+      (left_screen[1] >= y_min) & (left_screen[1] <= y_max)
+    )
+    right_in_clip = (
+      (right_screen[0] >= x_min) & (right_screen[0] <= x_max) &
+      (right_screen[1] >= y_min) & (right_screen[1] <= y_max)
+    )
+    both_in_clip = left_in_clip & right_in_clip
+
+    if not np.any(both_in_clip):
       return np.empty((0, 2), dtype=np.float32)
-    left_screen = left_screen[:valid_points]
-    right_screen = right_screen[:valid_points]
 
-    if self._clip_region:
-      clip = self._clip_region
-      bounds_mask = (
-        (left_screen[:, 0] >= clip.x) & (left_screen[:, 0] <= clip.x + clip.width) &
-        (left_screen[:, 1] >= clip.y) & (left_screen[:, 1] <= clip.y + clip.height) &
-        (right_screen[:, 0] >= clip.x) & (right_screen[:, 0] <= clip.x + clip.width) &
-        (right_screen[:, 1] >= clip.y) & (right_screen[:, 1] <= clip.y + clip.height)
-      )
-      if not np.any(bounds_mask):
+    # Select valid and clipped points
+    left_screen = left_screen[:, both_in_clip]
+    right_screen = right_screen[:, both_in_clip]
+
+    # Handle Y-coordinate inversion on hills
+    if not allow_invert and left_screen.shape[1] > 1:
+      y = left_screen[1, :]  # y-coordinates
+      keep = y == np.minimum.accumulate(y)
+      if not np.any(keep):
         return np.empty((0, 2), dtype=np.float32)
-      left_screen = left_screen[bounds_mask]
-      right_screen = right_screen[bounds_mask]
+      left_screen = left_screen[:, keep]
+      right_screen = right_screen[:, keep]
 
-    if not allow_invert and left_screen.shape[0] > 1:
-      keep = np.concatenate(([True], np.diff(left_screen[:, 1]) < 0))
-      left_screen = left_screen[keep]
-      right_screen = right_screen[keep]
-      if left_screen.shape[0] == 0:
-        return np.empty((0, 2), dtype=np.float32)
-
-    return np.vstack((left_screen, right_screen[::-1])).astype(np.float32)
-
-  @staticmethod
-  def _map_val(x, x0, x1, y0, y1):
-    x = np.clip(x, x0, x1)
-    ra = x1 - x0
-    rb = y1 - y0
-    return (x - x0) * rb / ra + y0 if ra != 0 else y0
+    return np.vstack((left_screen.T, right_screen[:, ::-1].T)).astype(np.float32)
 
   @staticmethod
   def _hsla_to_color(h, s, l, a):
     rgb = colorsys.hls_to_rgb(h, l, s)
     return rl.Color(
-        int(rgb[0] * 255),
-        int(rgb[1] * 255),
-        int(rgb[2] * 255),
-        int(a * 255)
+      int(rgb[0] * 255),
+      int(rgb[1] * 255),
+      int(rgb[2] * 255),
+      int(a * 255)
     )
 
   @staticmethod

@@ -5,14 +5,14 @@ import threading
 
 from cereal import messaging
 from openpilot.common.realtime import Ratekeeper
-from openpilot.common.retry import retry
+from openpilot.common.utils import retry
 from openpilot.common.swaglog import cloudlog
 
 RATE = 10
-FFT_SAMPLES = 4096
+FFT_SAMPLES = 1600 # 100ms
 REFERENCE_SPL = 2e-5  # newtons/m^2
-SAMPLE_RATE = 44100
-SAMPLE_BUFFER = 4096  # approx 100ms
+SAMPLE_RATE = 16000
+SAMPLE_BUFFER = 800  # 50ms
 
 
 @cache
@@ -45,7 +45,7 @@ def apply_a_weighting(measurements: np.ndarray) -> np.ndarray:
 class Mic:
   def __init__(self):
     self.rk = Ratekeeper(RATE)
-    self.pm = messaging.PubMaster(['microphone'])
+    self.pm = messaging.PubMaster(['soundPressure', 'rawAudioData'])
 
     self.measurements = np.empty(0)
 
@@ -61,12 +61,12 @@ class Mic:
       sound_pressure_weighted = self.sound_pressure_weighted
       sound_pressure_level_weighted = self.sound_pressure_level_weighted
 
-    msg = messaging.new_message('microphone', valid=True)
-    msg.microphone.soundPressure = float(sound_pressure)
-    msg.microphone.soundPressureWeighted = float(sound_pressure_weighted)
-    msg.microphone.soundPressureWeightedDb = float(sound_pressure_level_weighted)
+    msg = messaging.new_message('soundPressure', valid=True)
+    msg.soundPressure.soundPressure = float(sound_pressure)
+    msg.soundPressure.soundPressureWeighted = float(sound_pressure_weighted)
+    msg.soundPressure.soundPressureWeightedDb = float(sound_pressure_level_weighted)
 
-    self.pm.send('microphone', msg)
+    self.pm.send('soundPressure', msg)
     self.rk.keep_time()
 
   def callback(self, indata, frames, time, status):
@@ -76,6 +76,12 @@ class Mic:
 
     Logged A-weighted equivalents are rough approximations of the human-perceived loudness.
     """
+    msg = messaging.new_message('rawAudioData', valid=True)
+    audio_data_int_16 = (indata[:, 0] * 32767).astype(np.int16)
+    msg.rawAudioData.data = audio_data_int_16.tobytes()
+    msg.rawAudioData.sampleRate = SAMPLE_RATE
+    self.pm.send('rawAudioData', msg)
+
     with self.lock:
       self.measurements = np.concatenate((self.measurements, indata[:, 0]))
 
@@ -88,7 +94,7 @@ class Mic:
 
         self.measurements = self.measurements[FFT_SAMPLES:]
 
-  @retry(attempts=7, delay=3)
+  @retry(attempts=10, delay=3)
   def get_stream(self, sd):
     # reload sounddevice to reinitialize portaudio
     sd._terminate()

@@ -75,7 +75,7 @@ Options:
   --qcam                 load qcamera
   --no-hw-decoder        disable HW video decoding
   --no-vipc              do not output video
-  --all                  do output all messages including uiDebug, userFlag.
+  --all                  do output all messages including uiDebug, userBookmark.
                          this may causes issues when used along with UI
 
 Arguments:
@@ -88,15 +88,7 @@ To visualize the replay within the openpilot UI, run the following commands:
 
 ```bash
 tools/replay/replay <route-name>
-cd selfdrive/ui && ./ui
-```
-
-## Try Radar Point Visualization with Rerun
-To visualize radar points, run rp_visualization.py while tools/replay/replay is active.
-
-```bash
-tools/replay/replay <route-name>
-python3 replay/rp_visualization.py
+cd selfdrive/ui && ./ui.py
 ```
 
 ## Work with plotjuggler
@@ -118,7 +110,7 @@ simply replay a route using the `--dcam` and `--ecam` flags:
 cd tools/replay && ./replay --demo --dcam --ecam
 
 # then start watch3
-cd selfdrive/ui && ./watch3
+cd selfdrive/ui && ./watch3.py
 ```
 
 ![](https://i.imgur.com/IeaOdAb.png)

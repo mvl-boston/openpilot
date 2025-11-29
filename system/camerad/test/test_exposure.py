@@ -20,7 +20,7 @@ class TestCamerad:
 
   def _is_exposure_okay(self, i, med_mean=None):
     if med_mean is None:
-      med_mean = np.array([[0.2,0.4],[0.2,0.6]])
+      med_mean = np.array([[0.18,0.3],[0.18,0.3]])
     h, w = i.shape[:2]
     i = i[h//10:9*h//10,w//10:9*w//10]
     med_ex, mean_ex = med_mean
@@ -33,8 +33,8 @@ class TestCamerad:
   @with_processes(['camerad'])
   def test_camera_operation(self):
     passed = 0
-    start = time.time()
-    while time.time() - start < TEST_TIME and passed < REPEAT:
+    start = time.monotonic()
+    while time.monotonic() - start < TEST_TIME and passed < REPEAT:
       rpic, dpic = get_snapshots(frame="roadCameraState", front_frame="driverCameraState")
       wpic, _ = get_snapshots(frame="wideRoadCameraState")
 
