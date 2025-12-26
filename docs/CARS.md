@@ -5,6 +5,7 @@
 | Make      | Model (US Market Reference)   | Supported Package | ACC              | No ACC accel below | No ALC below      |
 | ----------| ------------------------------| ------------------| -----------------| -------------------| ------------------|
 | Acura     | ILX 2016-19                   | AcuraWatch Plus   | openpilot        | 25mph<sup>1</sup>  | 25mph             |
+| Acura     | MDX 2022                      | Type S            | Stock            | 0mph               | 3mph              |
 | Acura     | RDX 2016-18                   | AcuraWatch Plus   | openpilot        | 25mph<sup>1</sup>  | 12mph             |
 | Acura     | RDX 2019-21                   | All               | Stock            | 0mph               | 3mph              |
 | Honda     | Accord 2018-21                | All               | Stock            | 0mph               | 3mph              |
