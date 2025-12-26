@@ -44,7 +44,8 @@ segments = [
   ("HYUNDAI", "regenAA0FC4ED71E|2025-04-08--22-57-50--0"),
   ("HYUNDAI2", "regenAFB9780D823|2025-04-08--23-00-34--0"),
   ("TOYOTA", "regen218A4DCFAA1|2025-04-08--22-57-51--0"),
-  ("TOYOTA2", "regen107352E20EB|2025-04-08--22-57-46--0"),
+  # TODO: get new RAV4 route without enableDsu
+  # ("TOYOTA2", "regen107352E20EB|2025-04-08--22-57-46--0"),
   ("TOYOTA3", "regen1455E3B4BDF|2025-04-09--03-26-06--0"),
   ("HONDA", "regenB328FF8BA0A|2025-04-08--22-57-45--0"),
   ("HONDA2", "regen6170C8C9A35|2025-04-08--22-57-46--0"),
@@ -61,7 +62,7 @@ segments = [
 ]
 
 # dashcamOnly makes don't need to be tested until a full port is done
-excluded_interfaces = ["mock", "body"]
+excluded_interfaces = ["mock", "body", "psa"]
 
 BASE_URL = "https://commadataci.blob.core.windows.net/openpilotci/"
 REF_COMMIT_FN = os.path.join(PROC_REPLAY_DIR, "ref_commit")

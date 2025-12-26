@@ -242,6 +242,9 @@ class Updater:
     b: str | None = self.params.get("UpdaterTargetBranch")
     if b is None:
       b = self.get_branch(BASEDIR)
+    b = {
+      ("tizi", "release3"): "release-tizi",
+    }.get((HARDWARE.get_device_type(), b), b)
     return b
 
   @property
@@ -283,8 +286,8 @@ class Updater:
       self.params.put("LastUpdateUptimeOnroad", last_uptime_onroad)
       self.params.put("LastUpdateRouteCount", last_route_count)
     else:
-      last_uptime_onroad = self.params.get("LastUpdateUptimeOnroad") or last_uptime_onroad
-      last_route_count = self.params.get("LastUpdateRouteCount") or last_route_count
+      last_uptime_onroad = self.params.get("LastUpdateUptimeOnroad", return_default=True)
+      last_route_count = self.params.get("LastUpdateRouteCount", return_default=True)
 
     if exception is None:
       self.params.remove("LastUpdateException")
@@ -379,6 +382,8 @@ class Updater:
 
     setup_git_options(OVERLAY_MERGED)
 
+    run(["git", "config", "--replace-all", "remote.origin.fetch", "+refs/heads/*:refs/remotes/origin/*"], OVERLAY_MERGED)
+
     branch = self.target_branch
     git_fetch_output = run(["git", "fetch", "origin", branch], OVERLAY_MERGED)
     cloudlog.info("git fetch success: %s", git_fetch_output)
@@ -386,6 +391,7 @@ class Updater:
     cloudlog.info("git reset in progress")
     cmds = [
       ["git", "checkout", "--force", "--no-recurse-submodules", "-B", branch, "FETCH_HEAD"],
+      ["git", "branch", "--set-upstream-to", f"origin/{branch}"],
       ["git", "reset", "--hard"],
       ["git", "clean", "-xdff"],
       ["git", "submodule", "sync"],
