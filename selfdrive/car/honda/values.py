@@ -81,6 +81,7 @@ class CAR:
   ODYSSEY_CHN = "HONDA ODYSSEY CHN 2019"
   ACURA_RDX = "ACURA RDX 2018"
   ACURA_RDX_3G = "ACURA RDX 2020"
+  ACURA_MDX_4G = "ACURA MDX 2022"
   PILOT = "HONDA PILOT 2017"
   PASSPORT = "HONDA PASSPORT 2021"
   RIDGELINE = "HONDA RIDGELINE 2017"
@@ -1198,6 +1199,42 @@ FW_VERSIONS = {
       b'39990-TJB-A130\x00\x00'
     ],
   },
+  CAR.ACURA_MDX_4G: {
+    (Ecu.gateway, 0x18daeff1, None): [
+      b'38897-TYB-A010\x00\x00',
+      b'38897-TYC-A010\x00\x00',
+    ],
+    (Ecu.eps, 0x18da30f1, None): [
+      b'39990-TYA-A080\x00\x00',
+      b'39990-TYB-A020\x00\x00',
+    ],
+    (Ecu.srs, 0x18da53f1, None): [
+      b'77959-TYB-A020\x00\x00',
+      b'77959-TYC-A050\x00\x00',
+    ],
+    (Ecu.fwdCamera, 0x18dab5f1, None): [
+      b'36161-TYA-A050\x00\x00',
+      b'36161-TYB-A030\x00\x00',
+    ],
+    (Ecu.fwdRadar, 0x18dab0f1, None): [
+      b'36802-TYA-A040\x00\x00',
+      b'36802-TYB-A040\x00\x00',
+    ],
+    (Ecu.transmission, 0x18da1ef1, None): [
+      b'28102-61E-A010\x00\x00',
+      b'28102-61F-A010\x00\x00',
+    ],
+    (Ecu.vsa, 0x18da28f1, None): [
+      b'57114-TYA-A070\x00\x00',
+      b'57114-TYB-A150\x00\x00',
+    ],
+    (Ecu.shiftByWire, 0x18da0bf1, None): [
+      b'54008-TGV-A810\x00\x00',
+    ],
+    (Ecu.electricBrakeBooster, 0x18da2bf1, None): [
+      b'46114-TYA-A060\x00\x00',
+    ],
+  },
   CAR.RIDGELINE: {
     (Ecu.eps, 0x18da30f1, None): [
       b'39990-T6Z-A020\x00\x00',
@@ -1344,6 +1381,7 @@ DBC = {
   CAR.ACURA_ILX: dbc_dict('acura_ilx_2016_can_generated', 'acura_ilx_2016_nidec'),
   CAR.ACURA_RDX: dbc_dict('acura_rdx_2018_can_generated', 'acura_ilx_2016_nidec'),
   CAR.ACURA_RDX_3G: dbc_dict('acura_rdx_2020_can_generated', None),
+  CAR.ACURA_MDX_4G: dbc_dict('acura_mdx_2022_c2_can_generated', None),
   CAR.CIVIC: dbc_dict('honda_civic_touring_2016_can_generated', 'acura_ilx_2016_nidec'),
   CAR.CIVIC_BOSCH: dbc_dict('honda_civic_hatchback_ex_2017_can_generated', None),
   CAR.CIVIC_BOSCH_DIESEL: dbc_dict('honda_accord_2018_can_generated', None),
@@ -1373,5 +1411,5 @@ HONDA_NIDEC_ALT_PCM_ACCEL = {CAR.ODYSSEY}
 HONDA_NIDEC_ALT_SCM_MESSAGES = {CAR.ACURA_ILX, CAR.ACURA_RDX, CAR.CRV, CAR.CRV_EU, CAR.FIT, CAR.FREED, CAR.HRV, CAR.ODYSSEY_CHN,
                                 CAR.PILOT, CAR.PASSPORT, CAR.RIDGELINE}
 HONDA_BOSCH = {CAR.ACCORD, CAR.ACCORDH, CAR.CIVIC_BOSCH, CAR.CIVIC_BOSCH_DIESEL, CAR.CRV_5G,
-               CAR.CRV_HYBRID, CAR.INSIGHT, CAR.ACURA_RDX_3G, CAR.HONDA_E}
-HONDA_BOSCH_ALT_BRAKE_SIGNAL = {CAR.ACCORD, CAR.CRV_5G, CAR.ACURA_RDX_3G}
+               CAR.CRV_HYBRID, CAR.INSIGHT, CAR.ACURA_RDX_3G, CAR.ACURA_MDX_4G, CAR.HONDA_E}
+HONDA_BOSCH_ALT_BRAKE_SIGNAL = {CAR.ACCORD, CAR.CRV_5G, CAR.ACURA_RDX_3G} # note 4G MDX base needs ALT_BRAKE, not TypeS
