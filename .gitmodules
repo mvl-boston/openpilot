@@ -7,11 +7,11 @@
 [submodule "rednose_repo"]
 	path = rednose_repo
 	url = ../../commaai/rednose.git
-[submodule "opendbc"]
-	path = opendbc
-	url = https://github.com/mvl-boston/opendbc
-	branch = c2-mdx
 [submodule "panda"]
 	path = panda
 	url = https://github.com/mvl-boston/panda
+	branch = c2-mdx
+[submodule "opendbc"]
+	path = opendbc
+	url = https://github.com/mvl-boston/opendbc
 	branch = c2-mdx
