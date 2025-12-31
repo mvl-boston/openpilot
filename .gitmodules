@@ -1,6 +1,3 @@
-[submodule "panda"]
-	path = panda
-	url = ../../commaai/panda.git
 [submodule "opendbc"]
 	path = opendbc
 	url = ../../commaai/opendbc.git
@@ -13,3 +10,7 @@
 [submodule "rednose_repo"]
 	path = rednose_repo
 	url = ../../commaai/rednose.git
+[submodule "panda"]
+	path = panda
+	url = https://github.com/mvl-boston/panda
+	branch = c2-mdx
