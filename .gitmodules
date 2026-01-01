@@ -1,6 +1,3 @@
-[submodule "opendbc"]
-	path = opendbc
-	url = ../../commaai/opendbc.git
 [submodule "laika_repo"]
 	path = laika_repo
 	url = ../../commaai/laika.git
@@ -13,4 +10,8 @@
 [submodule "panda"]
 	path = panda
 	url = https://github.com/mvl-boston/panda
+	branch = c2-mdx
+[submodule "opendbc"]
+	path = opendbc
+	url = https://github.com/mvl-boston/opendbc
 	branch = c2-mdx
