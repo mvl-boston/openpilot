@@ -16,4 +16,4 @@
 [submodule "opendbc_repo"]
 	path = opendbc_repo
 	url = https://github.com/mvl-boston/opendbc
-	branch = mdx-2022-brakefault
+	branch = mdx-2022
