@@ -230,7 +230,7 @@ def hardware_thread(end_event, hw_queue) -> None:
 
       pandaState = pandaStates[0]
 
-      in_car = pandaState.harnessStatus != log.PandaState.HarnessStatus.notConnected
+      in_car = True # pandaState.harnessStatus != log.PandaState.HarnessStatus.notConnected
 
     elif (time.monotonic() - sm.recv_time['pandaStates']) > DISCONNECT_TIMEOUT:
       if onroad_conditions["ignition"]:
