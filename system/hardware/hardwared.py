@@ -232,7 +232,7 @@ def hardware_thread(end_event, hw_queue) -> None:
 
       pandaState = pandaStates[0]
 
-      in_car = pandaState.harnessStatus != log.PandaState.HarnessStatus.notConnected
+      in_car = True # pandaState.harnessStatus != log.PandaState.HarnessStatus.notConnected
 
       # Setup fan handler on first connect to panda
       if fan_controller is None and peripheral_panda_present:
