@@ -5,7 +5,7 @@
 <p>
   <b>openpilot is an operating system for robotics.</b>
   <br>
-  Currently, it upgrades the driver assistance system in 300+ supported cars.
+  Currently, it upgrades the driver assistance system in 300+ supported cars..
 </p>
 
 <h3>
