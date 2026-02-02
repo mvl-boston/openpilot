@@ -418,10 +418,10 @@ CONFIGS = [
     proc_name="selfdrived",
     pubs=[
       "carState", "deviceState", "pandaStates", "peripheralState", "liveCalibration", "driverMonitoringState",
-      "longitudinalPlan", "livePose", "liveDelay", "liveParameters", "radarState",
-      "modelV2", "driverCameraState", "roadCameraState", "wideRoadCameraState", "managerState",
-      "liveTorqueParameters", "accelerometer", "gyroscope", "carOutput",
-      "gpsLocationExternal", "gpsLocation", "controlsState", "carControl", "driverAssistance", "alertDebug",
+      "longitudinalPlan", "livePose", "liveDelay", "liveParameters", "radarState", "modelV2",
+      "driverCameraState", "roadCameraState", "wideRoadCameraState", "managerState", "liveTorqueParameters",
+      "accelerometer", "gyroscope", "carOutput", "gpsLocationExternal", "gpsLocation", "controlsState",
+      "carControl", "driverAssistance", "alertDebug", "audioFeedback",
     ],
     subs=["selfdriveState", "onroadEvents"],
     ignore=["logMonoTime"],
@@ -591,7 +591,7 @@ def get_custom_params_from_lr(lr: LogIterable, initial_state: str = "first") -> 
   if len(live_calibration) > 0:
     custom_params["CalibrationParams"] = live_calibration[msg_index].as_builder().to_bytes()
   if len(live_parameters) > 0:
-    custom_params["LiveParameters"] = live_parameters[msg_index].as_builder().to_bytes()
+    custom_params["LiveParametersV2"] = live_parameters[msg_index].as_builder().to_bytes()
   if len(live_torque_parameters) > 0:
     custom_params["LiveTorqueParameters"] = live_torque_parameters[msg_index].as_builder().to_bytes()
 

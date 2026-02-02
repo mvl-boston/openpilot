@@ -194,7 +194,7 @@ int handle_encoder_msg(LoggerdState *s, Message *msg, std::string &name, struct 
   return bytes_count;
 }
 
-void handle_user_flag(LoggerdState *s) {
+void handle_preserve_segment(LoggerdState *s) {
   static int prev_segment = -1;
   if (s->logger.segment() == prev_segment) return;
 
@@ -222,7 +222,7 @@ void loggerd_thread() {
   typedef struct ServiceState {
     std::string name;
     int counter, freq;
-    bool encoder, user_flag, record_audio;
+    bool encoder, preserve_segment, record_audio;
   } ServiceState;
   std::unordered_map<SubSocket*, ServiceState> service_state;
   std::unordered_map<SubSocket*, struct RemoteEncoder> remote_encoders;
@@ -238,7 +238,7 @@ void loggerd_thread() {
     if (it.should_log || (encoder && !livestream_encoder) || record_audio) {
       LOGD("logging %s", it.name.c_str());
 
-      SubSocket * sock = SubSocket::create(ctx.get(), it.name);
+      SubSocket * sock = SubSocket::create(ctx.get(), it.name, "127.0.0.1", false, true, it.queue_size);
       assert(sock != NULL);
       poller->registerSocket(sock);
       service_state[sock] = {
@@ -246,7 +246,7 @@ void loggerd_thread() {
         .counter = 0,
         .freq = it.decimation,
         .encoder = encoder,
-        .user_flag = it.name == "userFlag",
+        .preserve_segment = (it.name == "userBookmark") || (it.name == "audioFeedback"),
         .record_audio = record_audio,
       };
     }
@@ -281,8 +281,8 @@ void loggerd_thread() {
       if (do_exit) break;
 
       ServiceState &service = service_state[sock];
-      if (service.user_flag) {
-        handle_user_flag(&s);
+      if (service.preserve_segment) {
+        handle_preserve_segment(&s);
       }
 
       // drain socket
