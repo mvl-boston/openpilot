@@ -54,7 +54,7 @@ class TripsLayout(Widget):
     if not stats:
       return {}
     try:
-      return stats
+      return json.loads(stats)
     except Exception:
       cloudlog.exception(f"Failed to decode drive stats: {stats}")
       return {}
