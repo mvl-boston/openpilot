@@ -142,15 +142,14 @@ class UIStateSP:
     self.torque_bar = self.params.get_bool("TorqueBar")
     self.true_v_ego_ui = self.params.get_bool("TrueVEgoUI")
     self.turn_signals = self.params.get_bool("ShowTurnSignals")
+    self.boot_offroad_mode = self.params.get("DeviceBootMode", return_default=True)
 
 
 class DeviceSP:
-  def __init__(self):
-    self._params = Params()
-
-  def _set_awake(self, on: bool):
-    if on and self._params.get("DeviceBootMode", return_default=True) == 1:
-      self._params.put_bool("OffroadMode", True)
+  @staticmethod
+  def _set_awake(on: bool, _ui_state):
+    if _ui_state.boot_offroad_mode == 1 and not on:
+      _ui_state.params.put_bool("OffroadMode", True)
 
   @staticmethod
   def set_onroad_brightness(_ui_state, awake: bool, cur_brightness: float) -> float:
