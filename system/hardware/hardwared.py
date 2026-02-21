@@ -230,7 +230,7 @@ def hardware_thread(end_event, hw_queue) -> None:
 
       pandaState = pandaStates[0]
 
-      in_car = pandaState.harnessStatus != log.PandaState.HarnessStatus.notConnected
+      in_car = True # pandaState.harnessStatus != log.PandaState.HarnessStatus.notConnected
 
     elif (time.monotonic() - sm.recv_time['pandaStates']) > DISCONNECT_TIMEOUT:
       if onroad_conditions["ignition"]:
@@ -375,8 +375,9 @@ def hardware_thread(end_event, hw_queue) -> None:
                          startup_conditions_prev=startup_conditions_prev, error=True)
       startup_blocked_ts = None
     else:
-      if onroad_conditions["ignition"] and (startup_conditions != startup_conditions_prev):
-        cloudlog.event("Startup blocked", startup_conditions=startup_conditions, onroad_conditions=onroad_conditions, error=True)
+      if False: # onroad_conditions["ignition"] and (startup_conditions != startup_conditions_prev):
+        cloudlog.event("Startup blocked", startup_conditions=startup_conditions, startup_conditions_prev=startup_conditions_prev, \
+                       onroad_conditions=onroad_conditions, error=True)
         startup_conditions_prev = startup_conditions.copy()
         startup_blocked_ts = time.monotonic()
 
