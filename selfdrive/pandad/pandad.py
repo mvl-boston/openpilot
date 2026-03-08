@@ -166,7 +166,6 @@ def main() -> None:
       # find the internal supported panda (e.g. skip external Black Panda)
       internal_serial = find_internal_panda(panda_serials)
       if internal_serial is None:
-        no_internal_panda_count += 1
         continue
       panda_serials = [internal_serial]
 
