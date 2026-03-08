@@ -68,41 +68,20 @@ def flash_panda(panda_serial: str) -> Panda:
   return panda
 
 
-def check_panda_support(panda_serials: list[str]) -> bool:
-  spi_serials = set(Panda.spi_list())
-  if spi_serials & set(panda_serials):
-    return True
-
-  unsupported = []
-  for serial in panda_serials:
-    panda = Panda(serial)
-    hw_type = panda.get_type()
-    panda.close()
-    if hw_type in Panda.SUPPORTED_DEVICES:
-      return True
-
-    unsupported.append((serial, hw_type))
-
-  for serial, hw_type in unsupported:
-    cloudlog.warning(f"Panda {serial} is not supported (hw_type: {hw_type}), skipping...")
-
-  return False
-
-
-def find_internal_panda(panda_serials: list[str]) -> str | None:
+def check_panda_support(panda_serials: list[str]) -> list[str]:
   spi_serials = set(Panda.spi_list())
   for serial in panda_serials:
     if serial in spi_serials:
-      return serial
+      return [serial]
 
   for serial in panda_serials:
     panda = Panda(serial)
     is_internal = panda.is_internal()
     panda.close()
     if is_internal:
-      return serial
+      return [serial]
 
-  return None
+  return panda_serials
 
 
 def main() -> None:
@@ -139,15 +118,6 @@ def main() -> None:
           HARDWARE.reset_internal_panda()
         time.sleep(3)  # wait to come back up
 
-      panda_serials = Panda.list()
-      # custom flasher for xnor's Rivian Longitudinal Upgrade Kit
-      flash_rivian_long(panda_serials)
-
-      # skip flashing and health check if no supported panda is detected
-      if not check_panda_support(panda_serials):
-        no_internal_panda_count += 1
-        continue
-
       # Flash all Pandas in DFU mode
       dfu_serials = PandaDFU.list()
       if len(dfu_serials) > 0:
@@ -163,11 +133,11 @@ def main() -> None:
 
       cloudlog.info(f"{len(panda_serials)} panda(s) found, connecting - {panda_serials}")
 
+      # custom flasher for xnor's Rivian Longitudinal Upgrade Kit
+      flash_rivian_long(panda_serials)
+
       # find the internal supported panda (e.g. skip external Black Panda)
-      internal_serial = find_internal_panda(panda_serials)
-      if internal_serial is None:
-        continue
-      panda_serials = [internal_serial]
+      panda_serials = check_panda_support(panda_serials)
 
       # Flash the first panda
       panda_serial = panda_serials[0]
