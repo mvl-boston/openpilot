@@ -81,7 +81,7 @@ def check_panda_support(panda_serials: list[str]) -> list[str]:
     if is_internal:
       return [serial]
 
-  return panda_serials
+  return []
 
 
 def main() -> None:
@@ -138,6 +138,8 @@ def main() -> None:
 
       # find the internal supported panda (e.g. skip external Black Panda)
       panda_serials = check_panda_support(panda_serials)
+      if len(panda_serials) == 0:
+        continue
 
       # Flash the first panda
       panda_serial = panda_serials[0]
