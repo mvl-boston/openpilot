@@ -202,28 +202,31 @@ def getParamsAllKeysV1() -> dict[str, str]:
     with open(METADATA_PATH) as f:
       metadata = json.load(f)
   except Exception:
-    cloudlog.exception("sunnylinkd.getParamsAllKeysV1.exception")
+    cloudlog.exception("sunnylinkd.getParamsAllKeysV1.metadata.exception")
     metadata = {}
 
-  available_keys: list[str] = [k.decode('utf-8') for k in Params().all_keys()]
+  try:
+    available_keys: list[str] = [k.decode('utf-8') for k in Params().all_keys()]
 
-  params_dict: dict[str, list[dict[str, str | bool | int | object | dict | None]]] = {"params": []}
-  for key in available_keys:
-    value = get_param_as_byte(key, get_default=True)
+    params_dict: dict[str, list[dict[str, str | bool | int | object | dict | None]]] = {"params": []}
+    for key in available_keys:
+      value = get_param_as_byte(key, get_default=True)
 
-    param_entry = {
-      "key": key,
-      "type": int(params.get_type(key).value),
-      "default_value": base64.b64encode(value).decode('utf-8') if value else None,
-    }
+      param_entry = {
+        "key": key,
+        "type": int(params.get_type(key).value),
+        "default_value": base64.b64encode(value).decode('utf-8') if value else None,
+      }
 
-    if key in metadata:
-      meta_copy = metadata[key].copy()
-      param_entry["_extra"] = meta_copy
+      if key in metadata:
+        meta_copy = metadata[key].copy()
+        param_entry["_extra"] = meta_copy
 
-    params_dict["params"].append(param_entry)
-
-  return {"keys": json.dumps(params_dict.get("params", []))}
+      params_dict["params"].append(param_entry)
+    return {"keys": json.dumps(params_dict.get("params", []))}
+  except Exception:
+    cloudlog.exception("sunnylinkd.getParamsAllKeysV1.exception")
+    raise
 
 
 @dispatcher.add_method
@@ -281,7 +284,7 @@ def startLocalProxy(global_end_event: threading.Event, remote_ws_uri: str, local
   return start_local_proxy_shim(global_end_event, local_port, ws)
 
 
-def main(exit_event: threading.Event = None):
+def main(exit_event: threading.Event | None = None):
   try:
     set_core_affinity([0, 1, 2, 3])
   except Exception:
