@@ -83,6 +83,14 @@ class DeveloperLayout(Widget):
     )
     self._on_enable_ui_debug(self._params.get_bool("ShowDebugInfo"))
 
+    self._ui_forkswitch = toggle_item(
+      lambda: tr("UI Debug Mode"),
+      description="",
+      initial_state=self._params.get_bool("ShowDebugInfo"),
+      callback=self._on_enable_ui_debug,
+    )
+    self._on_enable_ui_debug(self._params.get_bool("ShowDebugInfo"))
+
     self._scroller = Scroller([
       self._adb_toggle,
       self._ssh_toggle,
@@ -91,6 +99,7 @@ class DeveloperLayout(Widget):
       self._long_maneuver_toggle,
       self._alpha_long_toggle,
       self._ui_debug_toggle,
+      self._ui_forkswitch,
     ], line_separator=True, spacing=0)
 
     # Toggles should be not available to change in onroad state
