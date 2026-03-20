@@ -86,10 +86,9 @@ class DeveloperLayout(Widget):
     self._ui_fork_switch = toggle_item(
       lambda: tr("Switch Fork"),
       description="",
-      initial_state=self._params.get_bool("ShowDebugInfo"),
+      initial_state=True,
       callback=self._on_enable_ui_debug,
     )
-    self._on_enable_ui_debug(self._params.get_bool("ShowDebugInfo"))
 
     self._scroller = Scroller([
       self._adb_toggle,
@@ -118,7 +117,7 @@ class DeveloperLayout(Widget):
 
     # Hide non-release toggles on release builds
     # TODO: we can do an onroad cycle, but alpha long toggle requires a deinit function to re-enable radar and not fault
-    for item in (self._joystick_toggle, self._long_maneuver_toggle, self._alpha_long_toggle):
+    for item in (self._joystick_toggle, self._long_maneuver_toggle, self._alpha_long_toggle, self._ui_fork_switch):
       item.set_visible(not self._is_release)
 
     # CP gating
@@ -148,7 +147,6 @@ class DeveloperLayout(Widget):
       ("LongitudinalManeuverMode", self._long_maneuver_toggle),
       ("AlphaLongitudinalEnabled", self._alpha_long_toggle),
       ("ShowDebugInfo", self._ui_debug_toggle),
-      ("SwitchForks", self._ui_fork_switch),
     ):
       item.action_item.set_state(self._params.get_bool(key))
 
