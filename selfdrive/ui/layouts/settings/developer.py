@@ -120,6 +120,8 @@ class DeveloperLayout(Widget):
     for item in (self._joystick_toggle, self._long_maneuver_toggle, self._alpha_long_toggle, self._ui_fork_switch):
       item.set_visible(not self._is_release)
 
+    self._ui_fork_switch.set_visible(True)
+
     # CP gating
     if ui_state.CP is not None:
       alpha_avail = ui_state.CP.alphaLongitudinalAvailable
