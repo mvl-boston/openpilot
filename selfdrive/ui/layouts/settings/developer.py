@@ -76,7 +76,7 @@ class DeveloperLayout(Widget):
     )
 
     self._ui_debug_toggle = toggle_item(
-      lambda: tr("UI Debug Mode"),
+      lambda: tr("UI Mybug Mode"),
       description="",
       initial_state=self._params.get_bool("ShowDebugInfo"),
       callback=self._on_enable_ui_debug,
