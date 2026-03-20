@@ -83,8 +83,8 @@ class DeveloperLayout(Widget):
     )
     self._on_enable_ui_debug(self._params.get_bool("ShowDebugInfo"))
 
-    self._ui_forkswitch = toggle_item(
-      lambda: tr("UI Debug Mode"),
+    self._ui_fork_switch = toggle_item(
+      lambda: tr("Switch Fork"),
       description="",
       initial_state=self._params.get_bool("ShowDebugInfo"),
       callback=self._on_enable_ui_debug,
@@ -99,7 +99,7 @@ class DeveloperLayout(Widget):
       self._long_maneuver_toggle,
       self._alpha_long_toggle,
       self._ui_debug_toggle,
-      self._ui_forkswitch,
+      self._ui_fork_switch,
     ], line_separator=True, spacing=0)
 
     # Toggles should be not available to change in onroad state
@@ -148,6 +148,7 @@ class DeveloperLayout(Widget):
       ("LongitudinalManeuverMode", self._long_maneuver_toggle),
       ("AlphaLongitudinalEnabled", self._alpha_long_toggle),
       ("ShowDebugInfo", self._ui_debug_toggle),
+      ("SwitchForks", self._ui_switch_forks),
     ):
       item.action_item.set_state(self._params.get_bool(key))
 
