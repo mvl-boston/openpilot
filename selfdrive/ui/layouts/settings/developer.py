@@ -148,7 +148,7 @@ class DeveloperLayout(Widget):
       ("LongitudinalManeuverMode", self._long_maneuver_toggle),
       ("AlphaLongitudinalEnabled", self._alpha_long_toggle),
       ("ShowDebugInfo", self._ui_debug_toggle),
-      ("SwitchForks", self._ui_switch_forks),
+      ("SwitchForks", self._ui_fork_switch),
     ):
       item.action_item.set_state(self._params.get_bool(key))
 
