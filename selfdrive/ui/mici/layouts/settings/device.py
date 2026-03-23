@@ -337,11 +337,14 @@ class DeviceLayoutMici(NavScroller):
     terms_btn = BigButton("terms &\nconditions", "", gui_app.texture("icons_mici/settings/device/info.png", 64, 64))
     terms_btn.set_click_callback(lambda: gui_app.push_widget(ReviewTermsPage()))
 
+    switch_branch_btn = BigButton("switch branch", "", gui_app.texture("icons_mici/settings/device/info.png", 64, 64))
+    switch_branch_btn.set_click_callback(lambda: gui_app.push_widget(ReviewTermsPage()))
+
     self._scroller.add_widgets([
       DeviceInfoLayoutMici(),
       UpdateOpenpilotBigButton(),
+      switch_branch_btn,
       PairBigButton(),
-      switch_forks_btn,
       review_training_guide_btn,
       driver_cam_btn,
       terms_btn,
