@@ -351,7 +351,7 @@ class DeviceLayoutMici(NavScroller):
 
     switch_branch_btn = BigButton("switch branch", "", gui_app.texture("icons_mici/settings/device/info.png", 64, 64))
     switch_branch_btn.set_click_callback(switch_branch_clicked)
-    
+
     self._scroller.add_widgets([
       DeviceInfoLayoutMici(),
       UpdateOpenpilotBigButton(),
