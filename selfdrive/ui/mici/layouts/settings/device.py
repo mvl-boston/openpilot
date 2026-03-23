@@ -341,6 +341,7 @@ class DeviceLayoutMici(NavScroller):
       DeviceInfoLayoutMici(),
       UpdateOpenpilotBigButton(),
       PairBigButton(),
+      switch_forks_btn,
       review_training_guide_btn,
       driver_cam_btn,
       terms_btn,
