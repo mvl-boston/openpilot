@@ -337,9 +337,21 @@ class DeviceLayoutMici(NavScroller):
     terms_btn = BigButton("terms &\nconditions", "", gui_app.texture("icons_mici/settings/device/info.png", 64, 64))
     terms_btn.set_click_callback(lambda: gui_app.push_widget(ReviewTermsPage()))
 
-    switch_branch_btn = BigButton("switch branch", "", gui_app.texture("icons_mici/settings/device/info.png", 64, 64))
-    switch_branch_btn.set_click_callback(lambda: gui_app.push_widget(ReviewTermsPage()))
+    def switch_branch_callback(password: str):
+      if password:
+        self._tethering_toggle_btn.set_enabled(False)
+        self._tethering_password_btn.set_enabled(False)
+        self._wifi_manager.set_tethering_password(password)
 
+    def switch_branch_clicked():
+      tethering_password = self._wifi_manager.tethering_password
+      dlg = BigInputDialog("enter password...", tethering_password, minimum_length=8,
+                           confirm_callback=switch_branch_callback)
+      gui_app.push_widget(dlg)
+
+    switch_branch_btn = BigButton("switch branch", "", gui_app.texture("icons_mici/settings/device/info.png", 64, 64))
+    switch_branch_btn.set_click_callback(switch_branch_clicked)
+    
     self._scroller.add_widgets([
       DeviceInfoLayoutMici(),
       UpdateOpenpilotBigButton(),
