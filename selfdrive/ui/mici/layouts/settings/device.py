@@ -367,7 +367,7 @@ class DeviceLayoutMici(NavScroller):
       self._power_off_btn,
     ])
 
-  def _(self):
+  def _on_regulatory(self):
     if not self._fcc_dialog:
       self._fcc_dialog = MiciFccModal(os.path.join(BASEDIR, "selfdrive/assets/offroad/mici_fcc.html"))
     gui_app.push_widget(self._fcc_dialog)
