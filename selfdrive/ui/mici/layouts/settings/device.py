@@ -9,7 +9,7 @@ from openpilot.common.params import Params
 from openpilot.common.time_helpers import system_time_valid
 from openpilot.system.ui.widgets.scroller import NavRawScrollPanel, NavScroller
 from openpilot.selfdrive.ui.mici.widgets.button import BigButton, BigCircleButton
-from openpilot.selfdrive.ui.mici.widgets.dialog import BigDialog, BigConfirmationDialog
+from openpilot.selfdrive.ui.mici.widgets.dialog import BigDialog, BigConfirmationDialog, BigInputDialog
 from openpilot.selfdrive.ui.mici.widgets.pairing_dialog import PairingDialog
 from openpilot.selfdrive.ui.mici.onroad.driver_camera_dialog import DriverCameraDialog
 from openpilot.selfdrive.ui.mici.layouts.onboarding import TrainingGuide, TermsPage
@@ -74,7 +74,7 @@ def _engaged_confirmation_click(callback: Callable, action_text: str, icon: rl.T
 
     gui_app.push_widget(BigConfirmationDialog(f"slide to\n{action_text.lower()}", icon, confirm_callback, exit_on_confirm=exit_on_confirm, red=red))
   else:
-    gui_app.push_widget(BigDialog("", f"Disengage to {action_text}"))
+    gui_app.push_widget(BigDialog(f"Disengage to {action_text}", ""))
 
 
 class EngagedConfirmationCircleButton(BigCircleButton):
@@ -156,9 +156,9 @@ class PairBigButton(BigButton):
       return
     dlg: BigDialog | PairingDialog
     if not system_time_valid():
-      dlg = BigDialog("", tr("Please connect to Wi-Fi to complete initial pairing."))
+      dlg = BigDialog(tr("Please connect to Wi-Fi to complete initial pairing"), "")
     elif UNREGISTERED_DONGLE_ID == (ui_state.params.get("DongleId") or UNREGISTERED_DONGLE_ID):
-      dlg = BigDialog("", tr("Device must be registered with the comma.ai backend to pair."))
+      dlg = BigDialog(tr("Device must be registered with the comma.ai backend to pair"), "")
     else:
       dlg = PairingDialog()
     gui_app.push_widget(dlg)
@@ -188,7 +188,7 @@ class UpdateOpenpilotBigButton(BigButton):
     super()._handle_mouse_release(mouse_pos)
 
     if not system_time_valid():
-      dlg = BigDialog("", tr("Please connect to Wi-Fi to update."))
+      dlg = BigDialog(tr("Please connect to Wi-Fi to update"), "")
       gui_app.push_widget(dlg)
       return
 
@@ -337,9 +337,25 @@ class DeviceLayoutMici(NavScroller):
     terms_btn = BigButton("terms &\nconditions", "", gui_app.texture("icons_mici/settings/device/info.png", 64, 64))
     terms_btn.set_click_callback(lambda: gui_app.push_widget(ReviewTermsPage()))
 
+    def switch_branch_callback(password: str):
+      if password:
+        self._tethering_toggle_btn.set_enabled(False)
+        self._tethering_password_btn.set_enabled(False)
+        self._wifi_manager.set_tethering_password(password)
+
+    def switch_branch_clicked():
+      tethering_password = self._wifi_manager.tethering_password
+      dlg = BigInputDialog("enter password...", tethering_password, minimum_length=8,
+                           confirm_callback=switch_branch_callback)
+      gui_app.push_widget(dlg)
+
+    switch_branch_btn = BigButton("switch branch", "", gui_app.texture("icons_mici/settings/device/info.png", 64, 64))
+    switch_branch_btn.set_click_callback(switch_branch_clicked)
+
     self._scroller.add_widgets([
       DeviceInfoLayoutMici(),
       UpdateOpenpilotBigButton(),
+      switch_branch_btn,
       PairBigButton(),
       review_training_guide_btn,
       driver_cam_btn,
