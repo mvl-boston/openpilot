@@ -337,16 +337,15 @@ class DeviceLayoutMici(NavScroller):
     terms_btn = BigButton("terms &\nconditions", "", gui_app.texture("icons_mici/settings/device/info.png", 64, 64))
     terms_btn.set_click_callback(lambda: gui_app.push_widget(ReviewTermsPage()))
 
-    def switch_branch_callback(password: str):
-      if password:
-        self._tethering_toggle_btn.set_enabled(False)
-        self._tethering_password_btn.set_enabled(False)
-        self._wifi_manager.set_tethering_password(password)
+    def switch_branch_handle_selection(new_branch: str):
+      if new_branch:
+        ui_state.params.put("UpdaterTargetBranch", new_branch)
+        os.system("pkill -SIGUSR1 -f system.updated.updated")
 
     def switch_branch_clicked():
-      tethering_password = self._wifi_manager.tethering_password
-      dlg = BigInputDialog("enter password...", tethering_password, minimum_length=8,
-                           confirm_callback=switch_branch_callback)
+      current_branch = ui_state.params.get("GitBranch") or ""
+      dlg = BigInputDialog("enter mvl_boston/", current_branch, minimum_length=1,
+                           confirm_callback=switch_branch_handle_selection)
       gui_app.push_widget(dlg)
 
     switch_branch_btn = BigButton("switch branch", "", gui_app.texture("icons_mici/settings/device/info.png", 64, 64))
