@@ -345,12 +345,12 @@ class DeviceLayoutMici(NavScroller):
     def switch_branch_clicked():
       current_branch = ui_state.params.get("GitBranch") or ""
       dlg = BigInputDialog("enter mvl_boston/", current_branch, minimum_length=1,
-                           confirm_callback=self.switch_branch_handle_selection(current_branch))
+                           confirm_callback=switch_branch_handle_selection(current_branch))
       gui_app.push_widget(dlg)
       return
 
     switch_branch_btn = BigButton("switch branch", "", gui_app.texture("icons_mici/settings/device/update.png", 64, 64))
-    switch_branch_btn.set_click_callback(self.switch_branch_clicked())
+    switch_branch_btn.set_click_callback(switch_branch_clicked())
 
     self._scroller.add_widgets([
       DeviceInfoLayoutMici(),
