@@ -344,7 +344,7 @@ class DeviceLayoutMici(NavScroller):
 
     def switch_branch_clicked():
       current_branch = ui_state.params.get("GitBranch") or ""
-      dlg = BigInputDialog("enter mvl_boston/", current_branch, minimum_length=1,
+      dlg = BigInputDialog("enter branch name:", current_branch, minimum_length=1,
                            confirm_callback=switch_branch_handle_selection)
       gui_app.push_widget(dlg)
       return
