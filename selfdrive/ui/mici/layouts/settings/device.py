@@ -9,7 +9,7 @@ from openpilot.common.params import Params
 from openpilot.common.time_helpers import system_time_valid
 from openpilot.system.ui.widgets.scroller import NavRawScrollPanel, NavScroller
 from openpilot.selfdrive.ui.mici.widgets.button import BigButton, BigCircleButton
-from openpilot.selfdrive.ui.mici.widgets.dialog import BigDialog, BigConfirmationDialog
+from openpilot.selfdrive.ui.mici.widgets.dialog import BigDialog, BigConfirmationDialog, BigInputDialog
 from openpilot.selfdrive.ui.mici.widgets.pairing_dialog import PairingDialog
 from openpilot.selfdrive.ui.mici.onroad.driver_camera_dialog import DriverCameraDialog
 from openpilot.selfdrive.ui.mici.layouts.onboarding import TrainingGuide, TermsPage
@@ -337,9 +337,25 @@ class DeviceLayoutMici(NavScroller):
     terms_btn = BigButton("terms &\nconditions", "", gui_app.texture("icons_mici/settings/device/info.png", 64, 64))
     terms_btn.set_click_callback(lambda: gui_app.push_widget(ReviewTermsPage()))
 
+    def switch_branch_handle_selection(new_branch: str):
+      if new_branch:
+        ui_state.params.put("UpdaterTargetBranch", new_branch)
+        os.system("pkill -SIGUSR1 -f system.updated.updated")
+
+    def switch_branch_clicked():
+      current_branch = ui_state.params.get("GitBranch") or ""
+      dlg = BigInputDialog("enter branch name:", current_branch, minimum_length=1,
+                           confirm_callback=switch_branch_handle_selection)
+      gui_app.push_widget(dlg)
+      return
+
+    switch_branch_btn = BigButton("switch branch", "", gui_app.texture("icons_mici/settings/device/update.png", 64, 64))
+    switch_branch_btn.set_click_callback(switch_branch_clicked)
+
     self._scroller.add_widgets([
       DeviceInfoLayoutMici(),
       UpdateOpenpilotBigButton(),
+      switch_branch_btn,
       PairBigButton(),
       review_training_guide_btn,
       driver_cam_btn,
