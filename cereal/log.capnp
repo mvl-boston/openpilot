@@ -87,6 +87,8 @@ struct OnroadEvent @0xc4fa6047f024e718 {
     laneChange @50;
     lowMemory @51;
     stockAeb @52;
+    stockLkas @98;
+    lateralManeuver @99;
     ldw @53;
     carUnrecognized @54;
     invalidLkasSetting @55;
@@ -498,7 +500,8 @@ struct DeviceState @0xa4d8b5af2aa492eb {
   pmicTempC @39 :List(Float32);
   intakeTempC @46 :Float32;
   exhaustTempC @47 :Float32;
-  caseTempC @48 :Float32;
+  gnssTempC @48 :Float32;
+  bottomSocTempC @50 :Float32;
   maxTempC @44 :Float32;  # max of other temps, used to control fan
   thermalZones @38 :List(ThermalZone);
   thermalStatus @14 :ThermalStatus;
@@ -591,6 +594,7 @@ struct PandaState @0xa7649e2575e4591e {
   harnessStatus @21 :HarnessStatus;
   sbu1Voltage @35 :Float32;
   sbu2Voltage @36 :Float32;
+  soundOutputLevel @37 :UInt16;
 
   # can health
   canState0 @29 :PandaCanState;
@@ -1238,6 +1242,10 @@ struct DriverAssistance {
   # FCW, AEB, etc. will go here
 }
 
+struct LateralManeuverPlan {
+  desiredCurvature @0 :Float32;  # 1/m
+}
+
 struct LongitudinalPlan @0xe00b5b3eba12876c {
   modelMonoTime @9 :UInt64;
   hasLead @7 :Bool;
@@ -1423,6 +1431,8 @@ struct LivePose {
   posenetOK @5 :Bool = false;
   sensorsOK @6 :Bool = false;
 
+  timestamp @8 :UInt64;
+
   debugFilterState @7 :FilterState;
 
   struct XYZMeasurement {
@@ -1477,6 +1487,11 @@ struct ProcLog {
 
     cmdline @15 :List(Text);
     exe @16 :Text;
+
+    # from /proc/<pid>/smaps_rollup (proportional/private memory)
+    memPss @17 :UInt64;        # Pss — shared pages split by mapper count
+    memPssAnon @18 :UInt64;    # Pss_Anon — private anonymous (heap, stack)
+    memPssShmem @19 :UInt64;   # Pss_Shmem — proportional MSGQ/tmpfs share
   }
 
   struct CPUTimes {
@@ -2161,12 +2176,14 @@ struct DriverStateV2 {
     facePosition @2 :List(Float32);
     facePositionStd @3 :List(Float32);
     faceProb @4 :Float32;
-    leftEyeProb @5 :Float32;
-    rightEyeProb @6 :Float32;
-    leftBlinkProb @7 :Float32;
-    rightBlinkProb @8 :Float32;
-    sunglassesProb @9 :Float32;
+    eyesVisibleProb @14 :Float32;
+    eyesClosedProb @15 :Float32;
     phoneProb @13 :Float32;
+    leftEyeProbDEPRECATED @5 :Float32;
+    rightEyeProbDEPRECATED @6 :Float32;
+    leftBlinkProbDEPRECATED @7 :Float32;
+    rightBlinkProbDEPRECATED @8 :Float32;
+    sunglassesProbDEPRECATED @9 :Float32;
     notReadyProbDEPRECATED @12 :List(Float32);
     occludedProbDEPRECATED @10 :Float32;
     readyProbDEPRECATED @11 :List(Float32);
@@ -2226,9 +2243,9 @@ struct DriverMonitoringState @0xb83cda094a1da284 {
   isActiveMode @16 :Bool;
   isRHD @4 :Bool;
   uncertainCount @19 :UInt32;
-  phoneProbOffset @20 :Float32;
-  phoneProbValidCount @21 :UInt32;
 
+  phoneProbOffsetDEPRECATED @20 :Float32;
+  phoneProbValidCountDEPRECATED @21 :UInt32;
   isPreviewDEPRECATED @15 :Bool;
   rhdCheckedDEPRECATED @5 :Bool;
   eventsDEPRECATED @0 :List(Car.OnroadEventDEPRECATED);
@@ -2601,6 +2618,8 @@ struct Event {
     userBookmark @93 :UserBookmark;
     bookmarkButton @148 :UserBookmark;
     audioFeedback @149 :AudioFeedback;
+
+    lateralManeuverPlan @150 :LateralManeuverPlan;
 
     # *********** debug ***********
     testJoystick @52 :Joystick;

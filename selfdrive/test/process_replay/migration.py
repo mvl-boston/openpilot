@@ -1,5 +1,6 @@
 from collections import defaultdict
 from collections.abc import Callable
+from typing import cast
 import capnp
 import functools
 import traceback
@@ -38,6 +39,7 @@ def migrate_all(lr: LogIterable, manager_states: bool = False, panda_states: boo
     migrate_carOutput,
     migrate_controlsState,
     migrate_carState,
+    migrate_livePose,
     migrate_liveTracks,
     migrate_driverAssistance,
     migrate_drivingModelData,
@@ -69,7 +71,7 @@ def migrate(lr: LogIterable, migration_funcs: list[MigrationFunc]):
     if migration.product in grouped: # skip if product already exists
       continue
 
-    sorted_indices = sorted(ii for i in migration.inputs for ii in grouped[i])
+    sorted_indices = sorted(ii for i in cast(list[str], migration.inputs) for ii in grouped.get(i, []))
     msg_gen = [(i, lr[i]) for i in sorted_indices]
     r_ops, a_ops, d_ops = migration(msg_gen)
     replace_ops.extend(r_ops)
@@ -176,6 +178,7 @@ def migrate_liveLocationKalman(msgs):
     m = messaging.new_message('livePose')
     m.valid = msg.valid
     m.logMonoTime = msg.logMonoTime
+    m.livePose.timestamp = msg.logMonoTime
     for field in ["orientationNED", "velocityDevice", "accelerationDevice", "angularVelocityDevice"]:
       lp_field, llk_field = getattr(m.livePose, field), getattr(msg.liveLocationKalmanDEPRECATED, field)
       lp_field.x, lp_field.y, lp_field.z = llk_field.value or nans
@@ -184,6 +187,21 @@ def migrate_liveLocationKalman(msgs):
     for flag in ["inputsOK", "posenetOK", "sensorsOK"]:
       setattr(m.livePose, flag, getattr(msg.liveLocationKalmanDEPRECATED, flag))
     ops.append((index, m.as_reader()))
+  return ops, [], []
+
+
+@migration(inputs=["livePose"])
+def migrate_livePose(msgs):
+  ops = []
+  needs_migration = all(msg.livePose.timestamp == 0 for _, msg in msgs if msg.which() == 'livePose')
+  if not needs_migration:
+    return [], [], []
+
+  for index, msg in msgs:
+    if msg.which() == "livePose":
+      new_msg = msg.as_builder()
+      new_msg.livePose.timestamp = msg.logMonoTime
+      ops.append((index, new_msg.as_reader()))
   return ops, [], []
 
 
