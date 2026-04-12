@@ -152,8 +152,8 @@ class MiciHomeLayout(Widget):
 
   def _get_version_text(self) -> tuple[str, str, str, str] | None:
     version = ui_state.params.get("Version")
-    branch = ui_state.params.get("GitBranch")
-    commit = ui_state.params.get("GitCommit")
+    branch = ui_state.params.get("GitBranch") + " " + ui_state.params.get("GitCommit")
+    commit = "https://buymeacoffee.com/mvlboston"
 
     if not all((version, branch, commit)):
       return None
