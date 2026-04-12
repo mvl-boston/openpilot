@@ -17,7 +17,9 @@ class FanController:
       self.controller.reset()
     self.last_ignition = ignition
 
+    factor = 0.7
+
     return int(self.controller.update(
-                 error=(cur_temp - 45),  # temperature setpoint in C
-                 feedforward=np.interp(cur_temp, [36.0, 60.0], [0, 100])
+                 error=(cur_temp - int(75 * factor)),  # temperature setpoint in C
+                 feedforward=np.interp(cur_temp/factor, [70.0, 100.0], [0, 100])
               ))
