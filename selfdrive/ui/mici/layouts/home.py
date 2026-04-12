@@ -152,7 +152,7 @@ class MiciHomeLayout(Widget):
 
   def _get_version_text(self) -> tuple[str, str, str, str] | None:
     version = ui_state.params.get("Version")
-    branch = ui_state.params.get("GitBranch") + " " + ui_state.params.get("GitCommit")
+    branch = ui_state.params.get("GitBranch") + " " + ui_state.params.get("GitCommit")[:7]
     commit = "buymeacoffee.com/mvlboston"
 
     if not all((version, branch, commit)):
@@ -166,7 +166,7 @@ class MiciHomeLayout(Widget):
     except (ValueError, IndexError, TypeError, AttributeError):
       date_str = ""
 
-    return version, branch, commit[:7], date_str
+    return version, branch, commit, date_str
 
   def _render(self, _):
     # TODO: why is there extra space here to get it to be flush?
