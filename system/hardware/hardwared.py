@@ -34,6 +34,7 @@ TEMP_TAU = 5.   # 5s time constant
 DISCONNECT_TIMEOUT = 5.  # wait 5 seconds before going offroad after disconnect so you get an alert
 PANDA_STATES_TIMEOUT = round(1000 / SERVICE_LIST['pandaStates'].frequency * 1.5)  # 1.5x the expected pandaState frequency
 ONROAD_CYCLE_TIME = 1  # seconds to wait offroad after requesting an onroad cycle
+MVL_TEMP_FACTOR = 0.6
 
 ThermalBand = namedtuple("ThermalBand", ['min_temp', 'max_temp'])
 HardwareState = namedtuple("HardwareState", ['network_type', 'network_info', 'network_strength', 'network_stats',
@@ -42,14 +43,14 @@ HardwareState = namedtuple("HardwareState", ['network_type', 'network_info', 'ne
 # List of thermal bands. We will stay within this region as long as we are within the bounds.
 # When exiting the bounds, we'll jump to the lower or higher band. Bands are ordered in the dict.
 THERMAL_BANDS = OrderedDict({
-  ThermalStatus.green: ThermalBand(None, 65.0),
-  ThermalStatus.yellow: ThermalBand(63.75, 69.0),
-  ThermalStatus.red: ThermalBand(67.0, 71.75),
-  ThermalStatus.danger: ThermalBand(68.5, None),
+  ThermalStatus.green: ThermalBand(None, 88.0 * MVL_TEMP_FACTOR),
+  ThermalStatus.yellow: ThermalBand(75.0 * MVL_TEMP_FACTOR, 96.0 * MVL_TEMP_FACTOR),
+  ThermalStatus.red: ThermalBand(88.0 * MVL_TEMP_FACTOR, 107. * MVL_TEMP_FACTOR),
+  ThermalStatus.danger: ThermalBand(94.0 * MVL_TEMP_FACTOR, None),
 })
 
 # Override to highest thermal band when offroad and above this temp
-OFFROAD_DANGER_TEMP = 64
+OFFROAD_DANGER_TEMP = int(75 * MVL_TEMP_FACTOR)
 
 prev_offroad_states: dict[str, tuple[bool, str | None]] = {}
 
