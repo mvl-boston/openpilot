@@ -108,9 +108,6 @@ class Car:
       self.CI, self.CP = CI, CI.CP
       self.RI = RI
 
-    if self.CI.CC is not None:
-      self.CI.CC.set_persistent_state(self.params)
-
     self.CP.alternativeExperience = 0
     openpilot_enabled_toggle = self.params.get_bool("OpenpilotEnabledToggle")
     controller_available = self.CI.CC is not None and openpilot_enabled_toggle and not self.CP.dashcamOnly
@@ -223,9 +220,6 @@ class Car:
       tracks_msg.valid = not any(RD.errors.to_dict().values())
       tracks_msg.liveTracks = RD
       self.pm.send('liveTracks', tracks_msg)
-
-    if self.sm.frame > 0 and self.sm.frame % int(60. / DT_CTRL) == 0 and self.CI.CC is not None:
-      self.CI.CC.get_persistent_state(self.params)
 
   def controls_update(self, CS: car.CarState, CC: car.CarControl):
     """control update loop, driven by carControl"""
