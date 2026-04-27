@@ -19,6 +19,7 @@ from opendbc.car.car_helpers import get_car, interfaces
 from opendbc.car.interfaces import CarInterfaceBase, RadarInterfaceBase
 from openpilot.selfdrive.pandad import can_capnp_to_list, can_list_to_can_capnp
 from openpilot.selfdrive.car.cruise import VCruiseHelper
+from openpilot.selfdrive.car.persistent_state import cache_honda_brake_pid_state, restore_honda_brake_pid_state
 
 REPLAY = "REPLAY" in os.environ
 
@@ -107,6 +108,8 @@ class Car:
     else:
       self.CI, self.CP = CI, CI.CP
       self.RI = RI
+
+    restore_honda_brake_pid_state(self.params, self.CI.CC)
 
     self.CP.alternativeExperience = 0
     openpilot_enabled_toggle = self.params.get_bool("OpenpilotEnabledToggle")
@@ -220,6 +223,9 @@ class Car:
       tracks_msg.valid = not any(RD.errors.to_dict().values())
       tracks_msg.liveTracks = RD
       self.pm.send('liveTracks', tracks_msg)
+
+    if self.sm.frame > 0 and self.sm.frame % int(60. / DT_CTRL) == 0:
+      cache_honda_brake_pid_state(self.params, self.CI.CC)
 
   def controls_update(self, CS: car.CarState, CC: car.CarControl):
     """control update loop, driven by carControl"""
