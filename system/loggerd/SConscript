@@ -8,6 +8,9 @@ src = ['logger.cc', 'zstd_writer.cc', 'video_writer.cc', 'encoder/encoder.cc', '
 if arch != "larch64":
   src += ['encoder/ffmpeg_encoder.cc']
   libs += ['yuv']
+  if arch != "Darwin":
+    # Vendored FFmpeg enables VA-API on desktop Linux, so link libva explicitly.
+    libs += ['va', 'va-drm', 'drm']
 
 if arch == "Darwin":
   # exclude v4l
