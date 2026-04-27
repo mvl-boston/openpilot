@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-import json
 import os
 import time
 import threading
@@ -22,7 +21,6 @@ from openpilot.selfdrive.pandad import can_capnp_to_list, can_list_to_can_capnp
 from openpilot.selfdrive.car.cruise import VCruiseHelper
 
 REPLAY = "REPLAY" in os.environ
-HONDA_BRAKE_PID_PARAMS = "HondaBrakePIDParams"
 
 EventName = log.OnroadEvent.EventName
 
@@ -111,13 +109,7 @@ class Car:
       self.RI = RI
 
     if self.CI.CC is not None:
-      brake_pid_state = self.params.get(HONDA_BRAKE_PID_PARAMS)
-      if brake_pid_state is not None:
-        try:
-          self.CI.CC.set_persistent_state(json.loads(brake_pid_state))
-        except Exception:
-          cloudlog.exception("failed to restore Honda brake PID params")
-          self.params.remove(HONDA_BRAKE_PID_PARAMS)
+      self.CI.CC.set_persistent_state(self.params)
 
     self.CP.alternativeExperience = 0
     openpilot_enabled_toggle = self.params.get_bool("OpenpilotEnabledToggle")
@@ -233,11 +225,7 @@ class Car:
       self.pm.send('liveTracks', tracks_msg)
 
     if self.sm.frame > 0 and self.sm.frame % int(60. / DT_CTRL) == 0 and self.CI.CC is not None:
-      try:
-        if (brake_pid_state := self.CI.CC.get_persistent_state()) is not None:
-          self.params.put_nonblocking(HONDA_BRAKE_PID_PARAMS, json.dumps(brake_pid_state))
-      except Exception:
-        cloudlog.exception("failed to cache Honda brake PID params")
+      self.CI.CC.get_persistent_state(self.params)
 
   def controls_update(self, CS: car.CarState, CC: car.CarControl):
     """control update loop, driven by carControl"""
