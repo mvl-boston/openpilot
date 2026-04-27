@@ -49,7 +49,7 @@ inline static std::unordered_map<std::string, ParamKeyAttributes> keys = {
     {"GithubSshKeys", {PERSISTENT, STRING}},
     {"GithubUsername", {PERSISTENT, STRING}},
     {"GitRemote", {PERSISTENT, STRING}},
-    {"HondaBrakePIDParams", {PERSISTENT | DONT_LOG, JSON}},
+    {"HondaBrakePIDParams", {PERSISTENT, FLOAT}},
     {"GsmApn", {PERSISTENT, STRING}},
     {"GsmMetered", {PERSISTENT, BOOL, "1"}},
     {"GsmRoaming", {PERSISTENT, BOOL}},
