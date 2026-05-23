@@ -55,6 +55,8 @@ inline static std::unordered_map<std::string, ParamKeyAttributes> keys = {
     {"HardwareSerial", {PERSISTENT, STRING}},
     {"HasAcceptedTerms", {PERSISTENT, STRING, "0"}},
     {"HondaBrakePIDParams", {PERSISTENT, FLOAT}},
+    {"HondaCreepFactorParams", {PERSISTENT, FLOAT}},
+    {"HondaCreepAlwaysParams", {PERSISTENT, FLOAT}},
     {"HondaFeedForwardParams", {PERSISTENT, FLOAT}},
     {"HondaGasFactorParams", {PERSISTENT, FLOAT}},
     {"HondaWindFactorParams", {PERSISTENT, FLOAT}},
