@@ -21,5 +21,5 @@ class FanController:
 
     return int(self.controller.update(
                  error=(cur_temp - int(75 * factor)),  # temperature setpoint in C
-                 feedforward=np.interp(cur_temp/factor, [80.0, 90.0], [0, 100])
+                 feedforward=np.interp(cur_temp/factor, [70.0, 75.0], [0, 100])
               ))
