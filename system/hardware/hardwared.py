@@ -46,7 +46,7 @@ THERMAL_BANDS = OrderedDict({
   ThermalStatus.green: ThermalBand(None, 88.0 * MVL_TEMP_FACTOR),
   ThermalStatus.yellow: ThermalBand(75.0 * MVL_TEMP_FACTOR, 94.0 * MVL_TEMP_FACTOR),
   ThermalStatus.red: ThermalBand(88.0 * MVL_TEMP_FACTOR, 99.5. * MVL_TEMP_FACTOR),
-  ThermalStatus.danger: ThermalBand(91.0 * MVL_TEMP_FACTOR, None),
+  ThermalStatus.danger: ThermalBand(93.0 * MVL_TEMP_FACTOR, None),
 #  ThermalStatus.yellow: ThermalBand(75.0 * MVL_TEMP_FACTOR, 96.0 * MVL_TEMP_FACTOR),
 #  ThermalStatus.red: ThermalBand(88.0 * MVL_TEMP_FACTOR, 107. * MVL_TEMP_FACTOR),
 #  ThermalStatus.danger: ThermalBand(94.0 * MVL_TEMP_FACTOR, None),
