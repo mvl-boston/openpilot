@@ -342,6 +342,7 @@ class DeviceLayoutMici(NavScroller):
       if new_branch:
         ui_state.params.put("UpdaterTargetBranch", new_branch)
         os.system("pkill -SIGUSR1 -f system.updated.updated")
+        self._scroller.scroll_panel.set_offset(-300)
 
     def switch_branch_clicked():
       current_branch = ui_state.params.get("GitBranch") or ""
