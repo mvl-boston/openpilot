@@ -262,6 +262,7 @@ class SoftwareLayoutMici(NavScroller):
       if new_branch:
         ui_state.params.put("UpdaterTargetBranch", new_branch, block=True)
         subprocess.run("pkill -SIGUSR1 -f openpilot.system.updated.updated", shell=True)
+        self._scroller.scroll_panel.set_offset(-300)
 
     def switch_branch_clicked():
       current_branch = ui_state.params.get("GitBranch") or ""
