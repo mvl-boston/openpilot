@@ -55,6 +55,18 @@ class CarInterface(CarInterfaceBase):
       ret.alphaLongitudinalAvailable = True
       ret.openpilotLongitudinalControl = alpha_long
       ret.pcmCruise = not ret.openpilotLongitudinalControl
+
+      if candidate == CAR.HONDA_CIVIC_BOSCH:
+        # 36802-TBA radar: READ the coarse selected-lead (0x2C8/0x2C9) for lead range while factory
+        # AEB/CMBS stays fully live. radarUnavailable=False keeps the radar alive so RadarInterface
+        # receives frames. openpilotLongitudinalControl is HARD-PINNED False (not the alpha_long UI
+        # toggle) so init()'s disable_ecu(0x18DAB0F1) guard (gated on openpilotLongitudinalControl)
+        # can never fire and stock ACC/AEB keeps 0x1DF authority. alphaLongitudinalAvailable=False
+        # removes the misleading toggle. pcmCruise stays True (stock ACC owns cruise).
+        ret.radarUnavailable = False
+        ret.alphaLongitudinalAvailable = False
+        ret.openpilotLongitudinalControl = False
+        ret.pcmCruise = True
     else:
       ret.safetyConfigs = [get_safety_config(structs.CarParams.SafetyModel.hondaNidec)]
       ret.openpilotLongitudinalControl = True
