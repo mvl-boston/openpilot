@@ -102,12 +102,12 @@ BO_ 713 RADAR_SELECTED_1: 8 RADAR
 
 
 CM_ "Stock 36802-TBA Bosch radar FINE per-track object table. Big-endian (Motorola), all frames DLC8. The radar broadcasts 6 track records, each a 4-frame burst on consecutive IDs; only the HEADER ID of each record (0x280/0x284/0x2D0/0x2D4/0x2D8/0x2DC) carries RANGE, and only on the sub-frame where B1==0x74 (the range-carrier header tag). The other 3 sub-frames of each record (0x281-0x283, 0x285-0x287, 0x2D1-0x2D3, ...) carry lateral/velocity/status and would decode to spurious sub-zero range -- they are deliberately NOT declared, so the parser never reads them as range. The parser GATES on TRACK_TAG(B1)==0x74. Sentinels (any one -> not an active track): STRENGTH(B0)==0xFE (idle), RANGE_RAW(B2:B3)==0x8000 (~114m unset), RANGE_RAW>=0xFF80 (~230m saturation rail). RANGE and RANGE_RAW intentionally overlap B2:B3 (scaled meters vs raw int for the sentinel test) -- opendbc decodes overlapping signals independently, exactly like the coarse LONG_DIST/LONG_DIST_HI overlap. RANGE scale/offset (0.00357, -3.0) is cross-car-validated; the offset -3.0 is tape-anchored. LAT_RAW is offset-binary (raw 0x8000 = center, declared with offset -32768); its physical m/LSB is NOT pinned, so the parser applies a clearly-placeholdered LAT_SCALE and yRel magnitude is DO_NOT_TRUST until a controlled lateral cal. vRel is NOT published by the radar on these frames; the parser derives it as d(dRel)/dt per track. 0x2C8/0x2C9 remain declared as a dormant coarse reference and are NOT read by the fine parser.";
-CM_ BO_ 640 "Track slot 0 header (record 0x280-0x283). Range carrier when TRACK_TAG(B1)==0x74. Most reliably-present slot; the parser's trigger_msg.";
+CM_ BO_ 640 "Track slot 0 header (record 0x280-0x283). Range carrier when TRACK_TAG(B1)==0x74. Head of the 6-slot sweep burst.";
 CM_ BO_ 644 "Track slot 1 header (record 0x284-0x287).";
 CM_ BO_ 720 "Track slot 2 header (record 0x2D0-0x2D3).";
 CM_ BO_ 724 "Track slot 3 header (record 0x2D4-0x2D7).";
 CM_ BO_ 728 "Track slot 4 header (record 0x2D8-0x2DB).";
-CM_ BO_ 732 "Track slot 5 header (record 0x2DC-0x2DF).";
+CM_ BO_ 732 "Track slot 5 header (record 0x2DC-0x2DF). Sweep terminator; the parser's trigger_msg (S4 sweep-coherent emit).";
 CM_ SG_ 640 STRENGTH "B0 raw, unscaled. Co-varies with range (return strength, not a flag). Used as the idle sentinel (==0xFE -> no track).";
 CM_ SG_ 640 TRACK_TAG "B1 raw. The range-carrier header tag. Parser GATES on ==0x74; any other value is a non-range sub-frame mux'd onto this ID -> SKIP (do not read RANGE).";
 CM_ SG_ 640 RANGE "B2:B3 BE16 -> meters. range = 0.00357*raw - 3.0. Scale cross-car-validated (corpus median 0.00357, R^2=0.975 vs fused dRel); offset -3.0 tape-anchored. 16-bit int, no float / no SIG_VALTYPE_ -- the parser consumes meters directly.";

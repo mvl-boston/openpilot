@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+import math
+
 from opendbc.can import CANParser
 from opendbc.car import Bus, structs
 from opendbc.car.interfaces import RadarInterfaceBase
@@ -53,6 +55,39 @@ BOSCH_RADAR_STALE_S = 0.15  # ~3 missed 20 Hz frames
 # so no real lead is ever rejected; only the swap artifact (which is ~20x over) is.
 BOSCH_RADAR_VREL_MAX = 100.0  # m/s; |derived vRel| above this == slot-reuse artifact, not a real speed
 
+# --- SAFE parity hardening constants (PARITY-MATRIX §3/§4; RX-only, keep-AEB preserved) ----------
+# S1 -- trackId no-reuse (capnp car.capnp:314 "no trackId reuse"). trackId is no longer the bare slot
+# index; it is slot*1000 + incarnation, where incarnation is bumped every time a slot is (re)born after
+# being vacated (sentinel/absent/wrong-tag) OR on a detected slot-reuse discontinuity. This way a slot
+# that hands off from object A to object B presents radard a DIFFERENT trackId, so radard's Kalman
+# tracker sees a clean birth instead of one continuous object teleporting. Still UInt64; still
+# slot-decodable as trackId // BOSCH_RADAR_TRACKID_STRIDE; never reused for a distinct physical object.
+BOSCH_RADAR_TRACKID_STRIDE = 1000  # trackId = slot * STRIDE + incarnation
+
+# S2 -- birth/persist hysteresis (Toyota valid_cnt pattern, toyota/radar_interface.py:66-77). A per-slot
+# confidence counter: +1 on a valid range-carrier frame (capped), -1 (floored at 0) on absent/sentinel/
+# wrong-tag. A point is only EMITTED once the counter reaches BORN_CYCLES (debounces a 1-frame glitch
+# into a phantom), and only DROPPED once the counter floors at 0 (tolerates a single missed cycle).
+# This governs per-slot birth/death WITHIN a live trigger stream only; the global STALE_S clear in
+# update() and the whole-bus-silent path are UNCHANGED and still win (a whole-bus silence wipes all).
+BOSCH_RADAR_BORN_CYCLES = 2  # consecutive valid cycles required before a slot emits a point
+BOSCH_RADAR_VALID_CAP = 5    # max value the per-slot confidence counter saturates at
+
+# S3 -- plausibility / self-consistency fault annotations (RX-only; error bits on RadarData, NOT
+# authority changes; NO new frame decoded -- this is the SAFE subset of matrix #18). (a) a decoded dRel
+# outside the physical band [RANGE_MIN, RANGE_MAX] for the declared scale is a decode/scale inconsistency
+# -> wrongConfig + skip the point. (b) if can_valid but the trigger slot's CNTR has not advanced for
+# CNTR_STALL_CYCLES cycles, the source is frozen-but-present -> radarFault.
+BOSCH_RADAR_RANGE_MIN = -3.0   # m; DBC offset floor (raw 0 -> -3.0). Below this == decode inconsistency.
+BOSCH_RADAR_RANGE_MAX = 230.0  # m; saturation rail ceiling. Above this == decode inconsistency.
+BOSCH_RADAR_CNTR_STALL_CYCLES = 3  # frozen-CNTR cycles (while can_valid) before radarFault
+
+# S6 -- vRel derivation hardening. Reject a non-positive dt (already guarded) AND clamp the dt upper
+# bound: after a long gap the tiny-denominator-free path is fine but a stale baseline across a long gap
+# would derive a spurious vRel from two far-apart-in-time samples -> re-seed (drop the derivative this
+# cycle) when dt exceeds this. Keeps the EMA + VREL_MAX guard intact.
+BOSCH_RADAR_VREL_DT_MAX_S = 0.5  # s; baseline older than this -> re-seed, do not derive a vRel
+
 
 def _create_bosch_can_parser(CP):
   if Bus.radar not in DBC[CP.carFingerprint]:
@@ -72,11 +107,21 @@ class RadarInterface(RadarInterfaceBase):
     # Bosch fine 0x280 track-table (Honda Civic Bosch, 36802-TBA) vs the legacy Nidec path
     self.bosch_radar = CP.carFingerprint == CAR.HONDA_CIVIC_BOSCH and Bus.radar in DBC[CP.carFingerprint]
 
-    # Per-track history for vRel derivation: trackId -> (last_dRel_m, last_seen_nanos).
+    # Per-SLOT history for vRel derivation: slot index -> (last_dRel_m, last_seen_nanos).
+    # NOTE: keyed by SLOT (0..5), not trackId. trackId now carries an incarnation (S1) so it changes on
+    # every (re)birth; the vRel baseline must persist across that change, hence the stable slot key.
     self._hist: dict[int, tuple[float, int]] = {}
-    # Parser-clock nanos of the last cycle the trigger header (0x280) was emitted on; -1 = never. Used
-    # by the staleness gate (compared against the parser's last-update clock). Tracked here rather than
-    # reading rcp.ts_nanos so a frame at absolute t=0 (synthetic/replay start) isn't mistaken for "never".
+    # S2 birth/persist hysteresis: slot index -> confidence counter (Toyota valid_cnt pattern).
+    self._valid_cnt: dict[int, int] = {}
+    # S1 trackId no-reuse: slot index -> current incarnation (bumped on (re)birth / slot-reuse break).
+    self._incarnation: dict[int, int] = {}
+    # S3 CNTR-stall fault: last seen trigger-slot CNTR and how many cycles it has been frozen.
+    self._last_cntr: int | None = None
+    self._cntr_stall = 0
+    # Parser-clock nanos of the last cycle the trigger header (sweep terminator 0x2DC) was emitted on;
+    # -1 = never. Used by the staleness gate (compared against the parser's last-update clock). Tracked
+    # here rather than reading rcp.ts_nanos so a frame at absolute t=0 (synthetic/replay start) isn't
+    # mistaken for "never".
     self._last_trigger_nanos = -1
 
     if self.radar_off_can:
@@ -84,8 +129,17 @@ class RadarInterface(RadarInterfaceBase):
       self.trigger_msg = 0x445
     elif self.bosch_radar:
       self.rcp = _create_bosch_can_parser(CP)
-      # Slot-0 header (0x280) is the most reliably-present track -> use it as the cadence trigger.
-      self.trigger_msg = 0x280
+      # S4 sweep-coherent trigger: the radar emits a 6-slot sweep as a short burst on consecutive header
+      # IDs, HEAD-first (0x280 leads, 0x2DC terminates -- confirmed across the bfcar capture: 234 sweeps,
+      # 0x280->0x2DC intra-sweep span mean 8.4 ms / max 20.2 ms, well under the ~60 ms inter-sweep
+      # cadence and the 150 ms STALE_S). Triggering on the HEAD (0x280) would emit a snapshot in which
+      # slot 0 is from sweep N but slots 1..5 are still from sweep N-1 (a 1-sweep time skew, demonstrated
+      # with a multi-slot replay). Trigger on the sweep TERMINATOR (0x2DC) instead -- like Toyota
+      # (RADAR_B_MSGS[-1]) and Hyundai (0x51F) -- so the emit fires only after the whole sweep has
+      # accumulated, giving a time-coherent snapshot. 0x2DC is as reliably present as 0x280 (also 234/234
+      # bursts; the trigger keys on FRAME ARRIVAL, not payload validity, so it fires even when 0x2DC's
+      # payload is a sentinel). The staleness gate (update()) and per-slot logic are otherwise unchanged.
+      self.trigger_msg = 0x2DC
     else:
       self.rcp = _create_nidec_can_parser(CP.carFingerprint)
       self.trigger_msg = 0x445
@@ -99,10 +153,10 @@ class RadarInterface(RadarInterfaceBase):
     self.updated_messages.update(vls)
 
     if self.trigger_msg not in self.updated_messages:
-      # Staleness fallback (Bosch fine only): the trigger header (0x280) drives the normal 20 Hz emit,
-      # but if it goes quiet while the parser keeps running we must still publish an EMPTY RadarData so
-      # radard drops the stale lead (no frozen phantom). Compare the parser's last-update clock to the
-      # last cycle 0x280 was emitted -- both from the (replay-safe) CAN frame clock.
+      # Staleness fallback (Bosch fine only): the trigger header (sweep terminator 0x2DC) drives the
+      # normal 20 Hz emit, but if it goes quiet while the parser keeps running we must still publish an
+      # EMPTY RadarData so radard drops the stale lead (no frozen phantom). Compare the parser's
+      # last-update clock to the last cycle the trigger was emitted -- both from the (replay-safe) clock.
       if self.bosch_radar and self.pts and self._last_trigger_nanos >= 0:
         now = self.rcp._last_update_nanos
         if (now - self._last_trigger_nanos) * 1e-9 > BOSCH_RADAR_STALE_S:
@@ -116,44 +170,81 @@ class RadarInterface(RadarInterfaceBase):
   def _bosch_stale_radardata(self):
     # Clear all tracks + vRel history and return an EMPTY RadarData (NOT None) so liveTracks keeps
     # publishing at 20 Hz with zero points -> radard drops the lead within a cycle. Reset the trigger
-    # clock so we emit the empty data exactly once until 0x280 returns.
+    # clock so we emit the empty data exactly once until the trigger (0x2DC) returns.
     self.pts.clear()
     self._hist.clear()
+    self._valid_cnt.clear()
+    # Do NOT reset _incarnation here: trackId no-reuse (S1) must hold across a staleness clear too, so a
+    # slot that revives after going stale gets a fresh trackId rather than reusing the pre-stale one.
     self._last_trigger_nanos = -1
+    self._last_cntr = None
+    self._cntr_stall = 0
     stale = structs.RadarData()
     if not self.rcp.can_valid:
       stale.errors.canError = True
     stale.errors.radarUnavailableTemporary = True
     return stale
 
+  def _bosch_trackid(self, slot):
+    # S1 trackId no-reuse: slot index -> stable-but-unique id (slot*STRIDE + incarnation). The
+    # incarnation is bumped on every (re)birth / slot-reuse break, so a slot that hands off from object A
+    # to object B presents radard a DIFFERENT trackId (capnp car.capnp:314 "no trackId reuse").
+    return slot * BOSCH_RADAR_TRACKID_STRIDE + self._incarnation.get(slot, 0)
+
+  def _bosch_clear_slot(self, slot):
+    # S2 persist hysteresis on an absent/sentinel/wrong-tag/out-of-band cycle: decay the per-slot
+    # confidence counter by 1 (floored at 0). The point + vRel history are RETAINED while the counter is
+    # still above 0 (tolerates a single missed cycle without dropping a real lead); they are only dropped
+    # once the counter floors at 0 (two clean missed cycles from a born point). The incarnation is NOT
+    # touched here; it is bumped at (re)birth so the NEXT object to occupy this slot gets a fresh trackId.
+    # pts/_hist are keyed by SLOT internally; the wire trackId lives on the point object's .trackId field.
+    cnt = max(self._valid_cnt.get(slot, 0) - 1, 0)
+    self._valid_cnt[slot] = cnt
+    if cnt == 0:
+      self.pts.pop(slot, None)
+      self._hist.pop(slot, None)
+
   def _update_bosch(self, updated_messages):
-    # FINE per-track object table (0x280 block). Fixed slot->trackId map (0x280->0 ... 0x2DC->5).
+    # FINE per-track object table (0x280 block). Fixed slot map (0x280->slot0 ... 0x2DC->slot5).
     # RX-parse only; never takes 0x1DF / longitudinal authority, so factory AEB/CMBS stays fully live.
     # Up to 6 RadarPoints are emitted; radard selects leadOne/leadTwo (we do NOT pre-select).
     #
-    # vRel is NOT published on these frames, so it is DERIVED per-track as d(dRel)/dt across cycles
-    # (per-slot history below). yRel sign/center are correct but its magnitude is a placeholder
-    # (LAT_SCALE NOT pinned). Range scale/offset live in the DBC (0.00357 m/unit, offset -3.0).
+    # trackId is slot*STRIDE + incarnation (S1, no-reuse). vRel is NOT published on these frames, so it is
+    # DERIVED per-SLOT as d(dRel)/dt across cycles (per-slot history below). yRel sign/center are correct
+    # but its magnitude is a placeholder (LAT_SCALE NOT pinned). Range scale/offset live in the DBC.
     ret = structs.RadarData()
     if not self.rcp.can_valid:
       ret.errors.canError = True
 
     # Clock from the CANParser frame timestamps (replay-safe: advances with rlog/replay time, not wall
-    # clock). Used for the per-track vRel dt. The hard staleness gate (0x280 stops arriving) lives in
-    # update() above; here we only handle per-slot presence/sentinel within an emit cycle.
+    # clock). Used for the per-track vRel dt. The hard staleness gate (trigger 0x2DC stops arriving) lives
+    # in update() above; here we only handle per-slot presence/sentinel within an emit cycle.
     now = self.rcp._last_update_nanos
-    # This method only runs when the trigger header (0x280) was present this cycle -> mark it seen so the
-    # staleness fallback in update() can detect when 0x280 later goes quiet.
+    # This method only runs when the trigger header (sweep terminator 0x2DC) was present this cycle -> mark
+    # it seen so the staleness fallback in update() can detect when the trigger later goes quiet.
     self._last_trigger_nanos = now
 
-    for ii in BOSCH_RADAR_HDR_MSGS:
-      trackId = BOSCH_RADAR_HDR_MSGS.index(ii)
+    # S3(b) CNTR-stall plausibility: track the trigger slot's CNTR. If it freezes while can_valid the
+    # source is present-but-frozen -> radarFault. The trigger (0x2DC) is guaranteed present this cycle (it
+    # is what gated us into _update_bosch), and every header carries the same 8-bit CNTR (DBC bit 63).
+    trig_cpt = self.rcp.vl[self.trigger_msg]
+    cur_cntr = int(trig_cpt['CNTR'])
+    if self._last_cntr is not None and cur_cntr == self._last_cntr:
+      self._cntr_stall += 1
+    else:
+      self._cntr_stall = 0
+    self._last_cntr = cur_cntr
+    if self.rcp.can_valid and self._cntr_stall >= BOSCH_RADAR_CNTR_STALL_CYCLES:
+      ret.errors.radarFault = True
 
-      # Stale-track aging: a header absent this trigger cycle is not a live track -> drop it (and its
-      # vRel history) so a long-absent slot cannot linger as a frozen point.
+    for ii in BOSCH_RADAR_HDR_MSGS:
+      slot = BOSCH_RADAR_HDR_MSGS.index(ii)
+
+      # Stale-track aging: a header absent this trigger cycle is not a live track -> decay confidence and
+      # drop the point/history so a long-absent slot cannot linger as a frozen point (S2 tolerates a
+      # single missed cycle: the point is only fully dropped once the counter floors at 0).
       if ii not in updated_messages:
-        self.pts.pop(trackId, None)
-        self._hist.pop(trackId, None)
+        self._bosch_clear_slot(slot)
         continue
 
       cpt = self.rcp.vl[ii]
@@ -161,8 +252,7 @@ class RadarInterface(RadarInterfaceBase):
       # Gate b1==0x74: only the range-carrier header sub-frame carries RANGE. Any other tag is a
       # non-range sub-frame mux'd onto this ID -> skip (clear the slot; do not read RANGE).
       if int(cpt['TRACK_TAG']) != BOSCH_RADAR_HDR_TAG:
-        self.pts.pop(trackId, None)
-        self._hist.pop(trackId, None)
+        self._bosch_clear_slot(slot)
         continue
 
       # Sentinel skip (broadened): idle strength, unset range, or saturation rail -> not an active track.
@@ -170,48 +260,96 @@ class RadarInterface(RadarInterfaceBase):
       if (int(cpt['STRENGTH']) == BOSCH_RADAR_STRENGTH_IDLE
           or range_raw == BOSCH_RADAR_RAW_UNSET
           or range_raw >= BOSCH_RADAR_RAW_SAT):
-        self.pts.pop(trackId, None)
-        self._hist.pop(trackId, None)
+        self._bosch_clear_slot(slot)
         continue
 
       dRel = cpt['RANGE']  # meters, DBC-scaled (0.00357*raw - 3.0). Calibrated cross-car.
 
-      # vRel derived as d(dRel)/dt per track (closing negative). NaN on first sight or non-advancing
-      # clock. Light EMA smoothing (alpha=0.5) tames LSB quantization noise at the cost of a little lag.
+      # S3(a) plausibility: a tag-passing, non-sentinel frame whose decoded dRel lands outside the
+      # physical band is a decode/scale inconsistency, not a real object -> flag wrongConfig and skip the
+      # point (do NOT emit a bad lead). RX-only error annotation; no authority change.
+      if not (BOSCH_RADAR_RANGE_MIN <= dRel <= BOSCH_RADAR_RANGE_MAX):
+        ret.errors.wrongConfig = True
+        self._bosch_clear_slot(slot)
+        continue
+
+      # S1 (re)birth detection: a slot whose confidence counter was floored at 0 BEFORE this cycle is a
+      # fresh occupant -> bump its incarnation so the trackId it will be published under does not reuse
+      # the prior occupant's, and clear its vRel baseline so the first derived sample is clean. Detect
+      # rebirth on the 0->1 confidence transition (first SIGHTING), NOT on point absence -- with S2 a slot
+      # is sighted for BORN_CYCLES-1 cycles before it is ever published, so point-absence would mis-fire.
+      was_vacant = self._valid_cnt.get(slot, 0) == 0
+      if was_vacant:
+        self._incarnation[slot] = self._incarnation.get(slot, 0) + 1
+        self._hist.pop(slot, None)
+
+      # S2 birth/persist hysteresis: this is a valid range-carrier frame -> +1 (saturating). A point is
+      # only emitted once the counter reaches BORN_CYCLES (debounces a 1-frame glitch into a phantom).
+      self._valid_cnt[slot] = min(self._valid_cnt.get(slot, 0) + 1, BOSCH_RADAR_VALID_CAP)
+
+      # vRel derived as d(dRel)/dt per SLOT (closing negative). NaN on first sight, non-advancing clock,
+      # or a re-seed. Light EMA smoothing (alpha=0.5) tames LSB quantization noise at the cost of lag.
       vRel = float('nan')
-      prev = self._hist.get(trackId)
+      non_advancing = False  # True only when the clock did not advance (dt <= 0) -> keep the old baseline
+      prev = self._hist.get(slot)
       if prev is not None:
         last_dRel, last_nanos = prev
         dt = (now - last_nanos) * 1e-9
-        if dt > 0:
+        # S6: reject non-positive dt (non-advancing clock) AND clamp the upper bound -- a baseline older
+        # than DT_MAX (a long gap) would derive a spurious vRel from two far-apart-in-time samples, so
+        # leave vRel NaN and re-seed instead of deriving.
+        if dt <= 0:
+          non_advancing = True
+        elif dt > BOSCH_RADAR_VREL_DT_MAX_S:
+          pass  # long-gap re-seed: vRel stays NaN; the baseline is refreshed below for the NEXT cycle
+        else:
           raw_vRel = (dRel - last_dRel) / dt
           if abs(raw_vRel) > BOSCH_RADAR_VREL_MAX:
-            # Slot-reuse discontinuity: this slot now carries a DIFFERENT physical object (trackId is the
-            # slot index). The implied speed is non-physical -> do NOT emit a phantom vRel. Leave vRel NaN
-            # this cycle and re-seed the history baseline below to the new object so the NEXT clean cycle
-            # derives a real vRel from it. radard treats NaN vRel as unknown rather than a fast closer.
-            pass
+            # Slot-reuse discontinuity: this slot now carries a DIFFERENT physical object even though it
+            # was continuously sighted (a dRel jump with no intervening vacant cycle, so the 0->1 rebirth
+            # path above did NOT fire). The implied speed is non-physical -> treat as a track BREAK (S1):
+            # bump the incarnation so radard sees a NEW trackId, and drop the stale point so it is
+            # re-created under that new id this cycle. The confidence counter is left intact (the slot is
+            # still occupied). vRel stays NaN this cycle; the NEXT clean cycle derives a real vRel from
+            # the re-seeded baseline.
+            self._incarnation[slot] = self._incarnation.get(slot, 0) + 1
+            self.pts.pop(slot, None)
           else:
-            # If we already have a prior vRel on the point, blend; else seed with the raw estimate.
-            prev_pt = self.pts.get(trackId)
+            # If we already have a prior vRel on the (surviving) point, blend; else seed with the raw est.
+            prev_pt = self.pts.get(slot)
             if prev_pt is not None and prev_pt.vRel == prev_pt.vRel:  # not NaN
               vRel = 0.5 * prev_pt.vRel + 0.5 * raw_vRel
             else:
               vRel = raw_vRel
-      self._hist[trackId] = (dRel, now)
+      # Refresh the per-slot baseline to this sample UNLESS the clock did not advance (dt <= 0), in which
+      # case keep the existing baseline (overwriting with an identical timestamp would never derive a vRel).
+      # A long-gap re-seed and a discontinuity break both DO refresh, so the NEXT cycle derives cleanly.
+      if not non_advancing:
+        self._hist[slot] = (dRel, now)
 
-      if trackId not in self.pts:
-        self.pts[trackId] = structs.RadarData.RadarPoint()
-        self.pts[trackId].trackId = trackId
-        self.pts[trackId].aRel = float('nan')
-        self.pts[trackId].yvRel = float('nan')
+      # S2 gate: do not emit until the slot is confidently born.
+      if self._valid_cnt[slot] < BOSCH_RADAR_BORN_CYCLES:
+        # Not yet confident enough to publish; keep accumulating. Drop any stale point (there should be
+        # none pre-birth) but retain the counter + baseline so the next valid cycle can promote it.
+        self.pts.pop(slot, None)
+        continue
 
-      self.pts[trackId].dRel = dRel
+      if slot not in self.pts:
+        self.pts[slot] = structs.RadarData.RadarPoint()
+        self.pts[slot].trackId = self._bosch_trackid(slot)
+        self.pts[slot].aRel = float('nan')
+        self.pts[slot].yvRel = float('nan')
+
+      self.pts[slot].dRel = dRel
       # yRel left-positive; offset-binary already centered in the DBC (raw 0x8000 -> 0). LAT_SCALE is a
       # PLACEHOLDER -- DO_NOT_TRUST yRel magnitude until a controlled lateral cal pins m/LSB.
-      self.pts[trackId].yRel = -cpt['LAT_RAW'] * BOSCH_RADAR_LAT_SCALE
-      self.pts[trackId].vRel = vRel
-      self.pts[trackId].measured = True
+      self.pts[slot].yRel = -cpt['LAT_RAW'] * BOSCH_RADAR_LAT_SCALE
+      self.pts[slot].vRel = vRel
+      # S5 honest measured flag: vRel is a DERIVED estimate, so flag the point as an estimate (measured=
+      # False) whenever vRel is not yet a valid derived value (first-sight/re-seed NaN). dRel/yRel are
+      # real measurements, but the capnp measured bit is about point-as-measurement-vs-estimate, and our
+      # headline kinematic (vRel) is derived -- True only once a stable derived vRel exists.
+      self.pts[slot].measured = not math.isnan(vRel)
 
     ret.points = list(self.pts.values())
     return ret
