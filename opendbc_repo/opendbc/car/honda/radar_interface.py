@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import math
+from math import pi, sin
 
 from opendbc.can import CANParser
 from opendbc.car import Bus, structs
@@ -35,9 +36,31 @@ BOSCH_RADAR_STRENGTH_IDLE = 0xFE
 BOSCH_RADAR_RAW_UNSET = 0x8000
 BOSCH_RADAR_RAW_SAT = 0xFF80
 
-# Lateral scale is NOT pinned (CONFIRM-REPORT §1). yRel sign + offset-binary center are correct; the
-# magnitude is a placeholder. TODO: DO_NOT_TRUST yRel magnitude until a controlled lateral cal pins this.
-BOSCH_RADAR_LAT_SCALE = 0.001  # PLACEHOLDER m/LSB -- exercises sign/center plumbing only
+# b4:b5 FIELD IDENTITY = AZIMUTH ANGLE (offset-binary, center 0x8000), NOT range-rate.
+# SETTLED 2026-06-08 by a three-source rlog regression against the vision-model lead (no flash, no TX,
+# no Ghidra, no controlled/tape capture) -- radar-re/latscale/_rlog/{peter-3d,peter-49,joey}.md and
+# radar-re/latscale/LATSCALE-SHIPPED.md. ~20,880 matched (radar-track <-> model-lead) frames across
+# three cars:
+#   * AZIMUTH wins every discriminating (high-lateral-motion) segment; richest segment (peter-3d seg168,
+#     lateral -4.14..+5.38 m) full-sin R^2=0.946, Pearson r(off, asin(y0/rng)) = -0.965.
+#   * RANGE-RATE is FALSIFIED: off vs relative velocity is flat to noise everywhere (R^2 0.01-0.08 on the
+#     discriminating segments; pooled Pearson r ~= +0.045). b4:b5 is NOT a free vRel -- vRel stays DERIVED.
+# So yRel is the lateral PROJECTION of the (range, azimuth) polar measurement, computed trigonometrically
+# from dRel and the offset-binary angle -- NOT a linear m/LSB on the raw field:
+#     yRel = -dRel * sin((b4b5 - 0x8000) * LAT_SCALE_DEG_PER_LSB * pi/180)
+# The negative sign (right-of-center b4b5 -> negative yRel) is the rlog-confirmed convention; LAT_RAW is
+# already (b4b5 - 0x8000) per the DBC offset -32768, so it feeds the sin directly.
+#
+# SCALE: ~0.0009-0.001 deg/LSB (per-source free fits: joey 0.000902, peter-3d 0.0007-0.00086,
+# peter-49 0.0006). The firmware-static candidate 0.001462 deg/LSB is REJECTED by all three sources
+# (joey nonlinear RMS 1.31 m vs 1.06 m at 0.001; peter-3d pooled R^2 0.215; peter-49 meters-R^2 -29).
+# 0.001 deg/LSB is the shipped value: a clean round figure at the top of the converged band, the explicit
+# recommendation of the two highest-n sources, and it beats 0.001462 decisively. MEDIUM confidence on the
+# third significant figure (0.0007-0.001 residual ambiguity) and the ABSOLUTE boresight zero-offset is
+# still unpinned (a per-mount bias the regression absorbed as a per-segment fixed effect) -- one parked
+# tape-measure read, or the on-road read-only x31 SRAM cross-check in radar-re/azimuth_capture.py, would
+# tighten both. The FIELD IDENTITY (azimuth, not range-rate) is HIGH confidence and settled.
+BOSCH_RADAR_LAT_SCALE_DEG_PER_LSB = 0.001  # deg/LSB; rlog-regressed band 0.0007-0.001, 0.001462 rejected
 
 # Staleness gate: if no fresh 0x280 header is seen for this long, clear all points and return an EMPTY
 # RadarData (not None) so radard drops the lead within a cycle (no frozen phantom). RadarPoints carry no
@@ -209,9 +232,11 @@ class RadarInterface(RadarInterfaceBase):
     # RX-parse only; never takes 0x1DF / longitudinal authority, so factory AEB/CMBS stays fully live.
     # Up to 6 RadarPoints are emitted; radard selects leadOne/leadTwo (we do NOT pre-select).
     #
-    # trackId is slot*STRIDE + incarnation (S1, no-reuse). vRel is NOT published on these frames, so it is
-    # DERIVED per-SLOT as d(dRel)/dt across cycles (per-slot history below). yRel sign/center are correct
-    # but its magnitude is a placeholder (LAT_SCALE NOT pinned). Range scale/offset live in the DBC.
+    # trackId is slot*STRIDE + incarnation (S1, no-reuse). vRel is NOT published on these frames (rlog-
+    # confirmed b4:b5 is azimuth, not range-rate), so it is DERIVED per-SLOT as d(dRel)/dt across cycles
+    # (per-slot history below). yRel is the trig projection of (dRel, azimuth) -- b4:b5 = azimuth, scale
+    # rlog-regressed to ~0.001 deg/LSB (MEDIUM on the exact value, HIGH on the identity; absolute
+    # boresight zero still unpinned). Range scale/offset live in the DBC.
     ret = structs.RadarData()
     if not self.rcp.can_valid:
       ret.errors.canError = True
@@ -341,9 +366,13 @@ class RadarInterface(RadarInterfaceBase):
         self.pts[slot].yvRel = float('nan')
 
       self.pts[slot].dRel = dRel
-      # yRel left-positive; offset-binary already centered in the DBC (raw 0x8000 -> 0). LAT_SCALE is a
-      # PLACEHOLDER -- DO_NOT_TRUST yRel magnitude until a controlled lateral cal pins m/LSB.
-      self.pts[slot].yRel = -cpt['LAT_RAW'] * BOSCH_RADAR_LAT_SCALE
+      # yRel = lateral projection of the polar (range, azimuth) measurement. b4:b5 is AZIMUTH ANGLE
+      # (offset-binary, center 0x8000), settled by the 2026-06-08 three-source rlog regression (see the
+      # LAT_SCALE block above); LAT_RAW is already (b4b5 - 0x8000) per the DBC offset. left-positive:
+      # right-of-center (LAT_RAW > 0) -> negative yRel (rlog-confirmed sign). Scale MEDIUM-confidence
+      # (0.0009-0.001 deg/LSB band; absolute boresight zero still unpinned) but field identity is HIGH.
+      az_deg = cpt['LAT_RAW'] * BOSCH_RADAR_LAT_SCALE_DEG_PER_LSB
+      self.pts[slot].yRel = -dRel * sin(az_deg * pi / 180.0)
       self.pts[slot].vRel = vRel
       # S5 honest measured flag: vRel is a DERIVED estimate, so flag the point as an estimate (measured=
       # False) whenever vRel is not yet a valid derived value (first-sight/re-seed NaN). dRel/yRel are

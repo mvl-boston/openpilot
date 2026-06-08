@@ -22,7 +22,7 @@ from opendbc.car.honda.radar_interface import (
   RadarInterface,
   BOSCH_RADAR_HDR_MSGS,
   BOSCH_RADAR_HDR_TAG,
-  BOSCH_RADAR_LAT_SCALE,
+  BOSCH_RADAR_LAT_SCALE_DEG_PER_LSB,
   BOSCH_RADAR_STALE_S,
   BOSCH_RADAR_VREL_MAX,
   BOSCH_RADAR_BORN_CYCLES,
@@ -223,12 +223,45 @@ class TestCivicBoschFineParser(unittest.TestCase):
     expected = (0.00357 * 3000 - 0.00357 * 4000) / 0.05  # raw d(dRel)/dt (first derived sample, no EMA yet)
     self.assertAlmostEqual(p.vRel, expected, delta=1.0)
 
-  def test_yrel_sign_and_placeholder_scale(self):
+  def test_yrel_azimuth_formula_and_sign(self):
+    # b4:b5 = AZIMUTH (rlog-settled 2026-06-08). yRel is the polar->cartesian projection:
+    #   yRel = -dRel * sin((b4b5 - 0x8000) * scale_deg * pi/180)
+    # NOT a linear m/LSB. Right-of-center (LAT_RAW > 0) -> negative yRel.
     rr = self._warm(3999, lat_raw=0x9000)  # lat_raw > center -> right; born under S2
     p = rr.points[0]
-    lat = 0x9000 - 0x8000
-    self.assertAlmostEqual(p.yRel, -lat * BOSCH_RADAR_LAT_SCALE, places=6)
+    lat = 0x9000 - 0x8000  # = +4096 LSB
+    dRel = 0.00357 * 3999 - 3.0
+    az_deg = lat * BOSCH_RADAR_LAT_SCALE_DEG_PER_LSB
+    expected = -dRel * math.sin(az_deg * math.pi / 180.0)
+    self.assertAlmostEqual(p.yRel, expected, places=6)
     self.assertLess(p.yRel, 0.0)  # right of center -> negative y
+    # And it is the trig projection, NOT the old linear -LAT_RAW*scale (the two differ once dRel != 1):
+    self.assertNotAlmostEqual(p.yRel, -lat * BOSCH_RADAR_LAT_SCALE_DEG_PER_LSB, places=6)
+
+  def test_yrel_center_is_zero(self):
+    # Exactly centered azimuth (LAT_RAW == 0) -> yRel == 0 regardless of range.
+    rr = self._warm(3999, lat_raw=0x8000)
+    self.assertAlmostEqual(rr.points[0].yRel, 0.0, places=9)
+
+  def test_yrel_left_positive(self):
+    # Left-of-center (LAT_RAW < 0) -> positive yRel (sign symmetry of the projection).
+    rr = self._warm(3999, lat_raw=0x7000)  # below center -> left
+    p = rr.points[0]
+    self.assertGreater(p.yRel, 0.0)
+    # magnitude matches the right-side case at the same offset magnitude
+    dRel = 0.00357 * 3999 - 3.0
+    az_deg = (0x7000 - 0x8000) * BOSCH_RADAR_LAT_SCALE_DEG_PER_LSB
+    self.assertAlmostEqual(p.yRel, -dRel * math.sin(az_deg * math.pi / 180.0), places=6)
+
+  def test_yrel_scales_with_range(self):
+    # AZIMUTH signature: at a FIXED angle, the lateral projection grows with range (a linear m/LSB
+    # field would be range-independent). Same lat_raw, two ranges -> |yRel| larger at the larger range.
+    # Use a fresh interface per range so the per-slot vRel/born history doesn't cross-contaminate.
+    near = self._warm(2000, lat_raw=0x9000, base_ns=0)        # dRel ~= 4.14 m
+    self.ri = _make_ri()                                       # reset; _warm/_emit read self.ri
+    self.bus = self.ri.rcp.bus
+    far = self._warm(6000, lat_raw=0x9000, base_ns=0)         # dRel ~= 18.42 m
+    self.assertLess(abs(near.points[0].yRel), abs(far.points[0].yRel))
 
   def _slots(self, rr):
     return {p.trackId // BOSCH_RADAR_TRACKID_STRIDE for p in rr.points}
