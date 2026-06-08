@@ -42,6 +42,17 @@ BOSCH_RADAR_LAT_SCALE = 0.001  # PLACEHOLDER m/LSB -- exercises sign/center plum
 # per-point monotime, so radard trusts points unconditionally -- a stalled source must be cleared here.
 BOSCH_RADAR_STALE_S = 0.15  # ~3 missed 20 Hz frames
 
+# vRel discontinuity guard (slot-reuse defense). trackId == slot index, so if object A vacates a slot and
+# object B enters the SAME slot in the next cycle WITHOUT an intervening empty/sentinel cycle, the naive
+# d(dRel)/dt derivative would teleport vRel to a physically impossible value (e.g. an observed ~1928 m/s)
+# for what radard then treats as one continuous object. Any implied |vRel| above this bound is therefore
+# NOT a real relative speed -- it is a track swap. We REJECT that sample (vRel -> NaN, and re-seed the
+# per-track history baseline to the NEW object's position) so the next clean cycle derives a real vRel
+# from the new object instead of carrying a phantom. The bound is deliberately generous: a genuine
+# fast-closing lead (stationary object at highway speed ~31 m/s, or a head-on ~60 m/s) is far below it,
+# so no real lead is ever rejected; only the swap artifact (which is ~20x over) is.
+BOSCH_RADAR_VREL_MAX = 100.0  # m/s; |derived vRel| above this == slot-reuse artifact, not a real speed
+
 
 def _create_bosch_can_parser(CP):
   if Bus.radar not in DBC[CP.carFingerprint]:
@@ -174,12 +185,19 @@ class RadarInterface(RadarInterfaceBase):
         dt = (now - last_nanos) * 1e-9
         if dt > 0:
           raw_vRel = (dRel - last_dRel) / dt
-          # If we already have a prior vRel on the point, blend; else seed with the raw estimate.
-          prev_pt = self.pts.get(trackId)
-          if prev_pt is not None and prev_pt.vRel == prev_pt.vRel:  # not NaN
-            vRel = 0.5 * prev_pt.vRel + 0.5 * raw_vRel
+          if abs(raw_vRel) > BOSCH_RADAR_VREL_MAX:
+            # Slot-reuse discontinuity: this slot now carries a DIFFERENT physical object (trackId is the
+            # slot index). The implied speed is non-physical -> do NOT emit a phantom vRel. Leave vRel NaN
+            # this cycle and re-seed the history baseline below to the new object so the NEXT clean cycle
+            # derives a real vRel from it. radard treats NaN vRel as unknown rather than a fast closer.
+            pass
           else:
-            vRel = raw_vRel
+            # If we already have a prior vRel on the point, blend; else seed with the raw estimate.
+            prev_pt = self.pts.get(trackId)
+            if prev_pt is not None and prev_pt.vRel == prev_pt.vRel:  # not NaN
+              vRel = 0.5 * prev_pt.vRel + 0.5 * raw_vRel
+            else:
+              vRel = raw_vRel
       self._hist[trackId] = (dRel, now)
 
       if trackId not in self.pts:

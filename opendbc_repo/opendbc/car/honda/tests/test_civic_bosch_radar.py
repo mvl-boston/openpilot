@@ -24,6 +24,7 @@ from opendbc.car.honda.radar_interface import (
   BOSCH_RADAR_HDR_TAG,
   BOSCH_RADAR_LAT_SCALE,
   BOSCH_RADAR_STALE_S,
+  BOSCH_RADAR_VREL_MAX,
 )
 from opendbc.car.honda.values import CAR, DBC
 
@@ -215,6 +216,57 @@ class TestCivicBoschFineParser(unittest.TestCase):
     self._step(0, [self._f(0x280, _hdr_frame(3000))])
     rr = self._step(int(0.02 * 1e9), [self._f(0x284, _hdr_frame(4000))])  # 0x280 absent, only 20ms later
     self.assertIsNone(rr)
+
+  def test_fully_silent_radar_clears_points_and_returns_empty(self):
+    # MOST safety-relevant staleness case: the radar goes COMPLETELY silent (no frames on ANY id) while
+    # the parser clock keeps advancing (e.g. radard still pumps update() on its own cadence). The
+    # frozen-phantom must still be cleared -> EMPTY RadarData (not None) + radarUnavailableTemporary.
+    self._step(0, [self._f(0x280, _hdr_frame(3000))])
+    self.assertEqual(len(self.ri.pts), 1)
+    stale_ns = int((BOSCH_RADAR_STALE_S + 0.05) * 1e9)
+    rr = self.ri.update(_can(stale_ns, []))  # whole bus silent, advancing timestamp
+    self.assertIsNotNone(rr)              # EMPTY RadarData, NOT None
+    self.assertEqual(len(rr.points), 0)
+    self.assertTrue(rr.errors.radarUnavailableTemporary)
+    self.assertEqual(len(self.ri.pts), 0)  # phantom cleared
+
+  def test_fully_silent_under_threshold_returns_none(self):
+    # Brief whole-bus silence under STALE_S must NOT prematurely drop the live point.
+    self._step(0, [self._f(0x280, _hdr_frame(3000))])
+    rr = self.ri.update(_can(int(0.05 * 1e9), []))  # 50 ms silent, well under 0.15 s
+    self.assertIsNone(rr)
+    self.assertEqual(len(self.ri.pts), 1)            # point retained
+
+  def test_vrel_discontinuity_guard_rejects_slot_reuse(self):
+    # trackId == slot index. If object A vacates slot 0 and object B enters the SAME slot in the next
+    # cycle WITHOUT an intervening sentinel, the naive derivative teleports vRel to a non-physical value.
+    # The guard must reject that sample (vRel NaN) AND re-seed history so the NEXT cycle derives cleanly.
+    dt_ns = int(0.05 * 1e9)  # 50 ms
+    # Object A at ~11 m, then ~11.04 m (slow), gives a small, real vRel.
+    self._step(0, [self._f(0x280, _hdr_frame(3900))])
+    rr = self._step(dt_ns, [self._f(0x280, _hdr_frame(3910))])
+    self.assertFalse(math.isnan(rr.points[0].vRel))   # real small vRel
+    # Cycle 3: a DIFFERENT object B jumps into slot 0 at ~110 m (raw ~31600). Implied speed is ~1900 m/s.
+    far_raw = int((110.0 + 3.0) / 0.00357)
+    rr = self._step(2 * dt_ns, [self._f(0x280, _hdr_frame(far_raw))])
+    p = rr.points[0]
+    self.assertTrue(math.isnan(p.vRel))               # phantom rejected -> NaN, not ~1900 m/s
+    self.assertAlmostEqual(p.dRel, 0.00357 * far_raw - 3.0, places=2)  # dRel still tracks the new object
+    # Cycle 4: object B advances slightly -> a real, in-bounds vRel now derives from the re-seeded baseline.
+    rr = self._step(3 * dt_ns, [self._f(0x280, _hdr_frame(far_raw - 10))])
+    p = rr.points[0]
+    self.assertFalse(math.isnan(p.vRel))
+    self.assertLessEqual(abs(p.vRel), BOSCH_RADAR_VREL_MAX)
+
+  def test_vrel_in_bounds_fast_lead_not_rejected(self):
+    # A genuine fast closer (e.g. stationary object at highway speed ~31 m/s) must NOT be rejected.
+    dt_ns = int(0.05 * 1e9)
+    self._step(0, [self._f(0x280, _hdr_frame(int((50.0 + 3.0) / 0.00357)))])      # 50 m
+    rr = self._step(dt_ns, [self._f(0x280, _hdr_frame(int((48.5 + 3.0) / 0.00357)))])  # 48.5 m -> ~-30 m/s
+    p = rr.points[0]
+    self.assertFalse(math.isnan(p.vRel))
+    self.assertLess(p.vRel, 0.0)
+    self.assertLessEqual(abs(p.vRel), BOSCH_RADAR_VREL_MAX)
 
   def test_returns_radardata_with_points_list(self):
     rr = self._step(0, [self._f(0x280, _hdr_frame(3000))])

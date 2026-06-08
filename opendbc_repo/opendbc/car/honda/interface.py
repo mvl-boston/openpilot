@@ -57,7 +57,7 @@ class CarInterface(CarInterfaceBase):
       ret.pcmCruise = not ret.openpilotLongitudinalControl
 
       if candidate == CAR.HONDA_CIVIC_BOSCH:
-        # 36802-TBA radar: READ the coarse selected-lead (0x2C8/0x2C9) for lead range while factory
+        # 36802-TBA radar: READ the FINE per-track object table (0x280 block) for lead range while factory
         # AEB/CMBS stays fully live. radarUnavailable=False keeps the radar alive so RadarInterface
         # receives frames. openpilotLongitudinalControl is HARD-PINNED False (not the alpha_long UI
         # toggle) so init()'s disable_ecu(0x18DAB0F1) guard (gated on openpilotLongitudinalControl)
