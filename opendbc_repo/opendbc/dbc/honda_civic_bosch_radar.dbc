@@ -1,4 +1,4 @@
-VERSION "honda_civic_bosch_radar -- 36802-TBA Bosch coarse selected-lead. Hand-written (NOT generated; named without _generated so it is git-tracked and loaded via the file fallback, like acura_ilx_2016_nidec.dbc). Bit positions/widths/endianness/sign VALIDATED across 6 rlog routes (2026-06-07, RLOG-RADAR-INGEST-CONFIRM.md). SCALE DISCIPLINE: REL_SPEED LSB=0.25 m/s locked (Bosch std, static cal cannot solve it); LONG_DIST/LAT_DIST factor are PLACEHOLDER/DO_NOT_TRUST pending R0 tape-measure calibration (atom A4). PHYSICAL BUS = openpilot CanBus.camera (rlog src=2), NOT CanBus.radar -- reconfirm via read-only sniff before trusting dRel. The frame counter/checksum are carried as CNTR/CHKSUM (NOT COUNTER/CHECKSUM) on purpose -- opendbc auto-enforces the hardcoded Honda checksum/counter on honda_* DBCs and would DROP every frame if this radar's algo/positions differ; this is RX-only lead data so we decode unconditionally and skip that enforcement."
+VERSION "honda_civic_bosch_radar -- 36802-TBA Bosch FINE per-track object table (0x280 block). Hand-written (NOT generated; named without _generated so it is git-tracked and loaded via the file fallback, like acura_ilx_2016_nidec.dbc). FINE decode cross-car CONFIRMED 2026-06-07 (3 cars / 6 routes; 8905 cross-car tracks fused leadOne.dRel at R^2=0.975 -- radar-re/finerange-confirm/CONFIRM-REPORT.md). This SUPERSEDES the coarse 0x2C8/0x2C9 selected-lead as the RANGE source: range is now carried in B2:B3 of the b1==0x74 header frame of each 4-frame track record at a PHYSICALLY CALIBRATED scale (0.00357 m/unit, offset -3.0). 0x2C8/0x2C9 remain declared below ONLY as a dormant coarse reference; the parser does NOT read range from them. PHYSICAL BUS = openpilot CanBus.camera (rlog src=2), NOT CanBus.radar -- the Bus.radar key is only the DBC-name lookup. The frame counter is carried as CNTR (NOT COUNTER) and there is NO CHECKSUM signal on the fine frames -- opendbc auto-enforces the hardcoded Honda checksum/counter on honda_* DBCs and would DROP every frame on the exact names CHECKSUM/COUNTER; this radar's framing is its own and this is RX-only lead data, so we name around the trap and decode unconditionally."
 
 NS_ :
 	NS_DESC_
@@ -35,11 +35,58 @@ BS_:
 BU_: RADAR XXX
 
 
+BO_ 640 RADAR_TRACK_0: 8 RADAR
+ SG_ STRENGTH : 7|8@0+ (1,0) [0|255] "" XXX
+ SG_ TRACK_TAG : 15|8@0+ (1,0) [0|255] "" XXX
+ SG_ RANGE : 23|16@0+ (0.00357,-3) [-3|230] "m" XXX
+ SG_ RANGE_RAW : 23|16@0+ (1,0) [0|65535] "" XXX
+ SG_ LAT_RAW : 39|16@0+ (1,-32768) [-32768|32767] "" XXX
+ SG_ CNTR : 63|8@0+ (1,0) [0|255] "" XXX
+
+BO_ 644 RADAR_TRACK_1: 8 RADAR
+ SG_ STRENGTH : 7|8@0+ (1,0) [0|255] "" XXX
+ SG_ TRACK_TAG : 15|8@0+ (1,0) [0|255] "" XXX
+ SG_ RANGE : 23|16@0+ (0.00357,-3) [-3|230] "m" XXX
+ SG_ RANGE_RAW : 23|16@0+ (1,0) [0|65535] "" XXX
+ SG_ LAT_RAW : 39|16@0+ (1,-32768) [-32768|32767] "" XXX
+ SG_ CNTR : 63|8@0+ (1,0) [0|255] "" XXX
+
+BO_ 720 RADAR_TRACK_2: 8 RADAR
+ SG_ STRENGTH : 7|8@0+ (1,0) [0|255] "" XXX
+ SG_ TRACK_TAG : 15|8@0+ (1,0) [0|255] "" XXX
+ SG_ RANGE : 23|16@0+ (0.00357,-3) [-3|230] "m" XXX
+ SG_ RANGE_RAW : 23|16@0+ (1,0) [0|65535] "" XXX
+ SG_ LAT_RAW : 39|16@0+ (1,-32768) [-32768|32767] "" XXX
+ SG_ CNTR : 63|8@0+ (1,0) [0|255] "" XXX
+
+BO_ 724 RADAR_TRACK_3: 8 RADAR
+ SG_ STRENGTH : 7|8@0+ (1,0) [0|255] "" XXX
+ SG_ TRACK_TAG : 15|8@0+ (1,0) [0|255] "" XXX
+ SG_ RANGE : 23|16@0+ (0.00357,-3) [-3|230] "m" XXX
+ SG_ RANGE_RAW : 23|16@0+ (1,0) [0|65535] "" XXX
+ SG_ LAT_RAW : 39|16@0+ (1,-32768) [-32768|32767] "" XXX
+ SG_ CNTR : 63|8@0+ (1,0) [0|255] "" XXX
+
+BO_ 728 RADAR_TRACK_4: 8 RADAR
+ SG_ STRENGTH : 7|8@0+ (1,0) [0|255] "" XXX
+ SG_ TRACK_TAG : 15|8@0+ (1,0) [0|255] "" XXX
+ SG_ RANGE : 23|16@0+ (0.00357,-3) [-3|230] "m" XXX
+ SG_ RANGE_RAW : 23|16@0+ (1,0) [0|65535] "" XXX
+ SG_ LAT_RAW : 39|16@0+ (1,-32768) [-32768|32767] "" XXX
+ SG_ CNTR : 63|8@0+ (1,0) [0|255] "" XXX
+
+BO_ 732 RADAR_TRACK_5: 8 RADAR
+ SG_ STRENGTH : 7|8@0+ (1,0) [0|255] "" XXX
+ SG_ TRACK_TAG : 15|8@0+ (1,0) [0|255] "" XXX
+ SG_ RANGE : 23|16@0+ (0.00357,-3) [-3|230] "m" XXX
+ SG_ RANGE_RAW : 23|16@0+ (1,0) [0|65535] "" XXX
+ SG_ LAT_RAW : 39|16@0+ (1,-32768) [-32768|32767] "" XXX
+ SG_ CNTR : 63|8@0+ (1,0) [0|255] "" XXX
+
+
 BO_ 712 RADAR_SELECTED_0: 8 RADAR
  SG_ LONG_DIST : 7|16@0+ (1,0) [0|65535] "m" XXX
  SG_ LONG_DIST_HI : 7|8@0+ (1,0) [0|255] "" XXX
- SG_ NEAR_DIST : 23|8@0+ (1,0) [0|255] "" XXX
- SG_ FLAGS_B3 : 31|8@0+ (1,0) [0|255] "" XXX
  SG_ LAT_DIST : 39|16@0+ (1,-32768) [-32768|32767] "m" XXX
  SG_ REL_SPEED : 55|8@0+ (0.25,-31.25) [-31.25|32.5] "m/s" XXX
  SG_ CNTR : 63|4@0+ (1,0) [0|15] "" XXX
@@ -48,19 +95,23 @@ BO_ 712 RADAR_SELECTED_0: 8 RADAR
 BO_ 713 RADAR_SELECTED_1: 8 RADAR
  SG_ LONG_DIST : 7|16@0+ (1,0) [0|65535] "m" XXX
  SG_ LONG_DIST_HI : 7|8@0+ (1,0) [0|255] "" XXX
- SG_ NEAR_DIST : 23|8@0+ (1,0) [0|255] "" XXX
- SG_ FLAGS_B3 : 31|8@0+ (1,0) [0|255] "" XXX
  SG_ LAT_DIST : 39|16@0+ (1,-32768) [-32768|32767] "m" XXX
  SG_ REL_SPEED : 55|8@0+ (0.25,-31.25) [-31.25|32.5] "m/s" XXX
  SG_ CNTR : 63|4@0+ (1,0) [0|15] "" XXX
  SG_ CHKSUM : 59|4@0+ (1,0) [0|15] "" XXX
 
 
-CM_ "Stock 36802-TBA Bosch radar coarse selected-lead protocol. Big-endian (Motorola). Last byte B7 = two 4-bit fields CNTR/CHKSUM (rolling counter + Honda-style checksum per rlog decode). CNTR/CHKSUM are decoded but UNUSED by openpilot and NOT safety-enforced (renamed from COUNTER/CHECKSUM precisely to avoid opendbc's honda_* auto-enforcement); exact nibble assignment is cosmetic and not relied upon. No-target sentinel: LONG_DIST_HI==0xFF (B0=0xFF, with LAT raw 0x8000 and REL raw 0x7D). LONG_DIST_HI intentionally overlaps LONG_DIST (B0) as a scale-invariant sentinel -- opendbc decodes overlapping signals independently. 0x280-0x2FF per-object bank exists (richer track list) but is OUT of Phase-1 scope.";
-CM_ BO_ 712 "SELECTED lead/near object (track 0). REL_SPEED B6 center 0x7D confirmed by range-rate correlation r=+0.80.";
-CM_ BO_ 713 "SELECTED lead 1 (track 1), same layout as 712.";
-CM_ SG_ 712 LONG_DIST "B0:B1 BE, monotonic with lead range. factor=1 is PLACEHOLDER -> R0 calibration (A4) deduces clean LSB + folds radar->bumper mount into offset. DO_NOT_TRUST until A4.";
-CM_ SG_ 712 LONG_DIST_HI "B0 high byte, raw unscaled. Used as the no-target sentinel (==0xFF -> no lead).";
-CM_ SG_ 712 NEAR_DIST "B2 near-field range stripe (carries signal when target very close and B0 pins low). Optional/future. DO_NOT_TRUST scale.";
-CM_ SG_ 712 LAT_DIST "B4:B5 BE offset-binary, raw 0x8000=center encoded as offset -32768. factor=1 PLACEHOLDER -> A4 sets m/LSB. yRel = -LAT_DIST (left positive). DO_NOT_TRUST until A4.";
-CM_ SG_ 712 REL_SPEED "B6 offset-binary, raw 0x7D=0 encoded as offset -31.25. LSB 0.25 m/s LOCKED (Bosch std). SIGN (closing<0) pending A4 dynamic verify drive.";
+CM_ "Stock 36802-TBA Bosch radar FINE per-track object table. Big-endian (Motorola), all frames DLC8. The radar broadcasts 6 track records, each a 4-frame burst on consecutive IDs; only the HEADER ID of each record (0x280/0x284/0x2D0/0x2D4/0x2D8/0x2DC) carries RANGE, and only on the sub-frame where B1==0x74 (the range-carrier header tag). The other 3 sub-frames of each record (0x281-0x283, 0x285-0x287, 0x2D1-0x2D3, ...) carry lateral/velocity/status and would decode to spurious sub-zero range -- they are deliberately NOT declared, so the parser never reads them as range. The parser GATES on TRACK_TAG(B1)==0x74. Sentinels (any one -> not an active track): STRENGTH(B0)==0xFE (idle), RANGE_RAW(B2:B3)==0x8000 (~114m unset), RANGE_RAW>=0xFF80 (~230m saturation rail). RANGE and RANGE_RAW intentionally overlap B2:B3 (scaled meters vs raw int for the sentinel test) -- opendbc decodes overlapping signals independently, exactly like the coarse LONG_DIST/LONG_DIST_HI overlap. RANGE scale/offset (0.00357, -3.0) is cross-car-validated; the offset -3.0 is tape-anchored. LAT_RAW is offset-binary (raw 0x8000 = center, declared with offset -32768); its physical m/LSB is NOT pinned, so the parser applies a clearly-placeholdered LAT_SCALE and yRel magnitude is DO_NOT_TRUST until a controlled lateral cal. vRel is NOT published by the radar on these frames; the parser derives it as d(dRel)/dt per track. 0x2C8/0x2C9 remain declared as a dormant coarse reference and are NOT read by the fine parser.";
+CM_ BO_ 640 "Track slot 0 header (record 0x280-0x283). Range carrier when TRACK_TAG(B1)==0x74. Most reliably-present slot; the parser's trigger_msg.";
+CM_ BO_ 644 "Track slot 1 header (record 0x284-0x287).";
+CM_ BO_ 720 "Track slot 2 header (record 0x2D0-0x2D3).";
+CM_ BO_ 724 "Track slot 3 header (record 0x2D4-0x2D7).";
+CM_ BO_ 728 "Track slot 4 header (record 0x2D8-0x2DB).";
+CM_ BO_ 732 "Track slot 5 header (record 0x2DC-0x2DF).";
+CM_ SG_ 640 STRENGTH "B0 raw, unscaled. Co-varies with range (return strength, not a flag). Used as the idle sentinel (==0xFE -> no track).";
+CM_ SG_ 640 TRACK_TAG "B1 raw. The range-carrier header tag. Parser GATES on ==0x74; any other value is a non-range sub-frame mux'd onto this ID -> SKIP (do not read RANGE).";
+CM_ SG_ 640 RANGE "B2:B3 BE16 -> meters. range = 0.00357*raw - 3.0. Scale cross-car-validated (corpus median 0.00357, R^2=0.975 vs fused dRel); offset -3.0 tape-anchored. 16-bit int, no float / no SIG_VALTYPE_ -- the parser consumes meters directly.";
+CM_ SG_ 640 RANGE_RAW "B2:B3 BE16 raw (factor 1). Overlaps RANGE; used for the scale-invariant sentinel tests (==0x8000 unset, >=0xFF80 saturation).";
+CM_ SG_ 640 LAT_RAW "B4:B5 BE offset-binary, raw 0x8000=center encoded as offset -32768. yRel = -LAT_RAW*LAT_SCALE (left positive) in the parser. LAT_SCALE NOT pinned -> yRel magnitude DO_NOT_TRUST; sign/center plumbing is correct.";
+CM_ SG_ 640 CNTR "B7 rolling counter. Decoded but UNUSED by openpilot and NOT safety-enforced (named CNTR, not COUNTER, to avoid opendbc's honda_* auto-enforcement that would drop frames).";
+CM_ SG_ 712 LONG_DIST "DORMANT coarse reference (0x2C8). NOT read by the fine parser; range is taken from the 0x280 block. Kept for diff/reference only.";
