@@ -476,6 +476,12 @@ HONDA_BOSCH = CAR.with_flags(HondaFlags.BOSCH)
 HONDA_BOSCH_RADARLESS = CAR.with_flags(HondaFlags.BOSCH_RADARLESS)
 HONDA_BOSCH_CANFD = CAR.with_flags(HondaFlags.BOSCH_CANFD)
 HONDA_BOSCH_ALT_RADAR = CAR.with_flags(HondaFlags.BOSCH_ALT_RADAR)
+
+# fwdRadar firmware confirmed (on-car) to keep streaming the 0x280 fine-range objects under openpilot
+# longitudinal control (op-long does NOT mute this radar). ONLY a Civic Bosch reporting this radar fw is
+# kept radar-live for the 0x280 ingest; any other radar fw falls back to the stock path (radar off) for
+# safety. Substring match so fwVersion padding/null bytes don't matter.
+RADAR_FW_0X280_INGEST = b"36802-TBA-A160"
 HONDA_BOSCH_TJA_CONTROL = CAR.with_flags(HondaFlags.BOSCH_TJA_CONTROL)
 HONDA_LKAS_MINSPEED_CUTOFF = CAR.with_flags(HondaFlags.LKAS_MINSPEED_CUTOFF)
 

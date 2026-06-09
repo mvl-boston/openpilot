@@ -5,7 +5,8 @@ from opendbc.car.common.conversions import Conversions as CV
 from opendbc.car.disable_ecu import disable_ecu
 from opendbc.car.honda.hondacan import CanBus
 from opendbc.car.honda.values import CarControllerParams, HondaFlags, CAR, HONDA_BOSCH, HONDA_BOSCH_CANFD, \
-                                                 HONDA_NIDEC_ALT_SCM_MESSAGES, HONDA_BOSCH_RADARLESS, HondaSafetyFlags
+                                                 HONDA_NIDEC_ALT_SCM_MESSAGES, HONDA_BOSCH_RADARLESS, HondaSafetyFlags, \
+                                                 RADAR_FW_0X280_INGEST
 from opendbc.car.honda.carcontroller import CarController
 from opendbc.car.honda.carstate import CarState
 from opendbc.car.honda.radar_interface import RadarInterface
@@ -56,15 +57,15 @@ class CarInterface(CarInterfaceBase):
       ret.openpilotLongitudinalControl = alpha_long
       ret.pcmCruise = not ret.openpilotLongitudinalControl
 
-      if candidate == CAR.HONDA_CIVIC_BOSCH:
-        # openpilot owns longitudinal AND we keep reading the 36802-TBA radar's 0x280 fine-range objects.
-        # Confirmed on-car: enabling op-long does NOT kill the radar object output (0x280 keeps streaming
-        # into our DBC), so radarUnavailable=False keeps RadarInterface ingesting them. Factory AEB/CMBS
-        # does NOT stay live under op-long (op-long takes 0x1DF/ACC authority on bus1) - known/accepted.
+      # 0x280 fine-range radar ingest is GATED on the confirmed radar firmware (RADAR_FW_0X280_INGEST in
+      # values.py). Only that radar keeps streaming 0x280 objects under op-long, so only it is kept
+      # radar-live (radarUnavailable=False); any other Civic Bosch radar fw keeps the standard HONDA_BOSCH
+      # path above (radarUnavailable=True) as the safe default. alpha-long/op-long are standard for all
+      # Bosch (set above). Factory AEB does NOT stay live under op-long (accepted). Fail-safe: if car_fw
+      # is empty/unknown the radar stays off.
+      if candidate == CAR.HONDA_CIVIC_BOSCH and \
+         any(fw.ecu == structs.CarParams.Ecu.fwdRadar and RADAR_FW_0X280_INGEST in fw.fwVersion for fw in car_fw):
         ret.radarUnavailable = False
-        ret.alphaLongitudinalAvailable = True
-        ret.openpilotLongitudinalControl = alpha_long
-        ret.pcmCruise = not ret.openpilotLongitudinalControl
     else:
       ret.safetyConfigs = [get_safety_config(structs.CarParams.SafetyModel.hondaNidec)]
       ret.openpilotLongitudinalControl = True
