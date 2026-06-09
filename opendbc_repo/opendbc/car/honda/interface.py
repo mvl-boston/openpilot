@@ -57,16 +57,14 @@ class CarInterface(CarInterfaceBase):
       ret.pcmCruise = not ret.openpilotLongitudinalControl
 
       if candidate == CAR.HONDA_CIVIC_BOSCH:
-        # 36802-TBA radar: READ the FINE per-track object table (0x280 block) for lead range while factory
-        # AEB/CMBS stays fully live. radarUnavailable=False keeps the radar alive so RadarInterface
-        # receives frames. openpilotLongitudinalControl is HARD-PINNED False (not the alpha_long UI
-        # toggle) so init()'s disable_ecu(0x18DAB0F1) guard (gated on openpilotLongitudinalControl)
-        # can never fire and stock ACC/AEB keeps 0x1DF authority. alphaLongitudinalAvailable=False
-        # removes the misleading toggle. pcmCruise stays True (stock ACC owns cruise).
+        # openpilot owns longitudinal AND we keep reading the 36802-TBA radar's 0x280 fine-range objects.
+        # Confirmed on-car: enabling op-long does NOT kill the radar object output (0x280 keeps streaming
+        # into our DBC), so radarUnavailable=False keeps RadarInterface ingesting them. Factory AEB/CMBS
+        # does NOT stay live under op-long (op-long takes 0x1DF/ACC authority on bus1) - known/accepted.
         ret.radarUnavailable = False
-        ret.alphaLongitudinalAvailable = False
-        ret.openpilotLongitudinalControl = False
-        ret.pcmCruise = True
+        ret.alphaLongitudinalAvailable = True
+        ret.openpilotLongitudinalControl = alpha_long
+        ret.pcmCruise = not ret.openpilotLongitudinalControl
     else:
       ret.safetyConfigs = [get_safety_config(structs.CarParams.SafetyModel.hondaNidec)]
       ret.openpilotLongitudinalControl = True
