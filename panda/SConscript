@@ -1,6 +1,7 @@
 import os
 import hashlib
 import opendbc
+import shutil
 import subprocess
 
 PREFIX = "arm-none-eabi-"
@@ -160,17 +161,24 @@ hh, ch, jh = version_hash("board/health.h"), version_hash(os.path.join(opendbc.I
 common_flags += [f"-DHEALTH_PACKET_VERSION=0x{hh:08X}U", f"-DCAN_PACKET_VERSION_HASH=0x{ch:08X}U",
                  f"-DJUNGLE_HEALTH_PACKET_VERSION=0x{jh:08X}U"]
 
-# panda fw
-build_project("panda_h7", base_project_h7, "./board/main.c", [])
-
-# panda jungle fw
-flags = [
-  "-DPANDA_JUNGLE",
+# On the prebuilt branch the committed .signed firmware binaries are authoritative and the
+# device (AGNOS) does not ship arm-none-eabi-gcc. Registering the firmware targets there is
+# actively harmful: the gitversion.h rewrite above invalidates the dependency graph and the
+# first on-device scons run tries to rebuild the firmware with a compiler that doesn't exist,
+# failing the boot build. Skip the targets when the cross-compiler is absent and all signed
+# binaries ship. Same guard pattern as the stripped-model skip in selfdrive/modeld/SConscript.
+fw_projects = [
+  ("panda_h7", "./board/main.c", []),
+  ("panda_jungle_h7", "./board/jungle/main.c", ["-DPANDA_JUNGLE"]),
+  ("body_h7", "./board/body/main.c", ["-DPANDA_BODY"]),
 ]
-build_project("panda_jungle_h7", base_project_h7, "./board/jungle/main.c", flags)
-
-# body fw
-build_project("body_h7", base_project_h7, "./board/body/main.c", ["-DPANDA_BODY"])
+signed_binaries_present = all(os.path.exists(f"board/obj/{name}.bin.signed") for name, _, _ in fw_projects)
+if shutil.which(f"{PREFIX}gcc") is None and signed_binaries_present:
+  print("panda: arm-none-eabi-gcc not available, using shipped signed firmware binaries")
+else:
+  # panda fw / panda jungle fw / body fw
+  for name, main_c, flags in fw_projects:
+    build_project(name, base_project_h7, main_c, flags)
 
 # test files
 SConscript('tests/libpanda/SConscript')
