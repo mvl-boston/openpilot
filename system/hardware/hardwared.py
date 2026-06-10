@@ -34,7 +34,6 @@ TEMP_TAU = 5.   # 5s time constant
 DISCONNECT_TIMEOUT = 5.  # wait 5 seconds before going offroad after disconnect so you get an alert
 PANDA_STATES_TIMEOUT = round(1000 / SERVICE_LIST['pandaStates'].frequency * 1.5)  # 1.5x the expected pandaState frequency
 ONROAD_CYCLE_TIME = 1  # seconds to wait offroad after requesting an onroad cycle
-MVL_TEMP_FACTOR = 0.65
 
 ThermalBand = namedtuple("ThermalBand", ['min_temp', 'max_temp'])
 HardwareState = namedtuple("HardwareState", ['network_type', 'network_info', 'network_strength', 'network_stats',
@@ -50,13 +49,13 @@ if HARDWARE.get_device_type() == "mici":
   })
 else:
   THERMAL_BANDS = OrderedDict({
-    ThermalStatus.ok: ThermalBand(None, 94.0 * MVL_TEMP_FACTOR),
-    ThermalStatus.overheated: ThermalBand(88.0 * MVL_TEMP_FACTOR, 99.5 * MVL_TEMP_FACTOR),
-    ThermalStatus.critical: ThermalBand(93.0 * MVL_TEMP_FACTOR, None),
+    ThermalStatus.ok: ThermalBand(None, 96.0),
+    ThermalStatus.overheated: ThermalBand(88.0, 107.),
+    ThermalStatus.critical: ThermalBand(94.0, None),
   })
 
 # Override to highest thermal band when offroad and above this temp
-OFFROAD_DANGER_TEMP = 85 if HARDWARE.get_device_type() == "mici" else int(75 * MVL_TEMP_FACTOR)
+OFFROAD_DANGER_TEMP = 85 if HARDWARE.get_device_type() == "mici" else 75
 
 prev_offroad_states: dict[str, tuple[bool, str | None]] = {}
 
