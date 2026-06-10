@@ -73,6 +73,13 @@ class NrdrLayout(Widget):
       initial_state=True,
     )
 
+    self._radar_tryout = toggle_item_sp(
+      param="HondaCivicRadarTryout",
+      title=lambda: tr("Try Honda Bosch Radar (experimental)"),
+      description=lambda: tr("EXPERIMENTAL — Honda Bosch radar try-out. When ON, openpilot reads the factory Bosch radar's fine-range objects (0x280 track table) for PERCEPTION ONLY: it sets radarUnavailable=False and uses the custom honda_civic_bosch_radar DBC. It does NOT enable openpilot longitudinal control and does NOT command any braking — on a stock-ACC car openpilot longitudinal is off, so radar leads cannot affect braking. This is a safe, read-only try-out. The 0x280 range/azimuth decode is reverse-engineered and unverified on your car: VALIDATE lead distance/closing-rate against reality before relying on it for anything. Honda Civic Bosch only. Leave OFF if unsure."),
+      initial_state=False,
+    )
+
     self._lateral_button = simple_button_item_sp(
       button_text=lambda: tr("Lateral Tuning"),
       button_width=800,
@@ -97,6 +104,8 @@ class NrdrLayout(Widget):
       self._lp_angle_avg,
       self._lp_angle_inst,
       self._learn_angle_offset,
+      LineSeparatorSP(40),
+      self._radar_tryout,
       LineSeparatorSP(40),
       self._lateral_button,
       LineSeparatorSP(40),
