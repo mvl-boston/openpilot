@@ -10,7 +10,7 @@ from cereal import log
 import cereal.messaging as messaging
 import openpilot.system.sentry as sentry
 from openpilot.common.utils import atomic_write
-from openpilot.common.params import Params, ParamKeyFlag
+from openpilot.common.params import Params, ParamKeyFlag, UnknownKeyName
 from openpilot.common.text_window import TextWindow
 from openpilot.system.hardware import HARDWARE
 from openpilot.system.manager.helpers import unblock_stdout, write_onroad_params, save_bootlog
@@ -84,13 +84,16 @@ NRDR_DEFAULT_VALUE_PARAMS = {
 
 def apply_nrdr_default_params(params: Params) -> None:
   """Apply nrdr fork defaults without overriding user-selected values."""
-  for key, value in NRDR_DEFAULT_BOOL_PARAMS.items():
-    if params.get(key) is None:
-      params.put_bool(key, value)
-
-  for key, value in NRDR_DEFAULT_VALUE_PARAMS.items():
-    if params.get(key) is None:
-      params.put(key, value)
+  for defaults, put in ((NRDR_DEFAULT_BOOL_PARAMS, params.put_bool), (NRDR_DEFAULT_VALUE_PARAMS, params.put)):
+    for key, value in defaults.items():
+      try:
+        if params.get(key) is None:
+          put(key, value)
+      except UnknownKeyName:
+        # params_pyx.so predates this key (stale prebuilt artifact, see launch_chffrplus.sh
+        # `prebuilt` gate). Skip instead of bricking the boot: the key's feature stays
+        # inactive until the next on-device build compiles the current params_keys.h.
+        cloudlog.error(f"nrdr default param {key!r} unknown to compiled params (stale params_pyx.so?), skipping")
 
 
 def manager_init() -> None:

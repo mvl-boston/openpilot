@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import numpy as np
 from opendbc.car import get_safety_config, structs, uds
-from openpilot.common.params import Params
+from openpilot.common.params import Params, UnknownKeyName
 from opendbc.car.common.conversions import Conversions as CV
 from opendbc.car.disable_ecu import disable_ecu
 from opendbc.car.honda.hondacan import CanBus
@@ -72,7 +72,12 @@ class CarInterface(CarInterfaceBase):
       # enables experimental/alpha longitudinal (op-long stays = alpha_long, same as a matched car).
       # EXPERIMENTAL: the decode is reverse-engineered and not validated on every individual car — the user
       # must confirm lead distance/closing-rate before relying on it for longitudinal control.
-      _radar_tryout = candidate == CAR.HONDA_CIVIC_BOSCH and not docs and Params().get_bool("HondaCivicRadarTryout")
+      try:
+        _tryout_enabled = Params().get_bool("HondaCivicRadarTryout")
+      except UnknownKeyName:
+        # stale prebuilt params_pyx.so that predates the key -- fail safe: radar try-out off
+        _tryout_enabled = False
+      _radar_tryout = candidate == CAR.HONDA_CIVIC_BOSCH and not docs and _tryout_enabled
       _radar_fw_match = candidate == CAR.HONDA_CIVIC_BOSCH and \
         any(fw.ecu == structs.CarParams.Ecu.fwdRadar and RADAR_FW_0X280_INGEST in fw.fwVersion for fw in car_fw)
       if _radar_fw_match or _radar_tryout:
