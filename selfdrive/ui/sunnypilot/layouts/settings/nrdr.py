@@ -76,7 +76,7 @@ class NrdrLayout(Widget):
     self._radar_tryout = toggle_item_sp(
       param="HondaCivicRadarTryout",
       title=lambda: tr("Try Honda Bosch Radar (experimental)"),
-      description=lambda: tr("EXPERIMENTAL — Honda Bosch radar try-out. When ON, openpilot reads the factory Bosch radar's fine-range objects (0x280 track table) for PERCEPTION ONLY: it sets radarUnavailable=False and uses the custom honda_civic_bosch_radar DBC. It does NOT enable openpilot longitudinal control and does NOT command any braking — on a stock-ACC car openpilot longitudinal is off, so radar leads cannot affect braking. This is a safe, read-only try-out. The 0x280 range/azimuth decode is reverse-engineered and unverified on your car: VALIDATE lead distance/closing-rate against reality before relying on it for anything. Honda Civic Bosch only. Leave OFF if unsure."),
+      description=lambda: tr("EXPERIMENTAL — Honda Bosch radar. When ON, openpilot reads the factory Bosch radar's fine-range objects (0x280) and treats this car like a fingerprint-matched radar car (radarUnavailable=False + the custom honda_civic_bosch_radar DBC). If you ALSO enable openpilot experimental/alpha longitudinal, this radar WILL feed openpilot's lead tracking and command braking/acceleration — exactly like a matched car. With openpilot longitudinal OFF (stock ACC) it is perception only. The 0x280 decode is reverse-engineered and cross-car validated (~0.99) but NOT verified on your specific car: before enabling openpilot longitudinal, VALIDATE that lead distance and closing-rate match reality. Honda Civic Bosch only. Leave OFF if unsure."),
       initial_state=False,
     )
 
