@@ -44,8 +44,21 @@ compiled_flags_node = lenv.Command(
 # tinygrad calls brew which needs a $HOME in the env
 mac_brew_string = f'HOME={os.path.expanduser("~")}' if arch == 'Darwin' else ''
 
+# On prebuilt/release branches the large driving-model .onnx sources are stripped from the
+# tree and only the compiled *_tinygrad.pkl artifacts ship, so those models can't (and don't
+# need to) be compiled: skip their build targets and use the shipped artifacts as-is.
+# Same guard pattern as sunnypilot/modeld_v2/SConscript.
+ALL_MODELS = ['driving_vision', 'driving_policy', 'dmonitoring_model']
+buildable_models = [m for m in ALL_MODELS if os.path.exists(File(f"models/{m}.onnx").abspath)]
+for model_name in ALL_MODELS:
+  if model_name not in buildable_models:
+    for artifact in (f"models/{model_name}_tinygrad.pkl", f"models/{model_name}_metadata.pkl"):
+      assert os.path.exists(File(artifact).abspath), \
+        f"models/{model_name}.onnx is missing and shipped artifact {artifact} not found -- tree can neither build nor run this model"
+    print(f"modeld: models/{model_name}.onnx not in tree (prebuilt branch), using shipped artifacts")
+
 # Get model metadata
-for model_name in ['driving_vision', 'driving_policy', 'dmonitoring_model']:
+for model_name in buildable_models:
   fn = File(f"models/{model_name}").abspath
   script_files = [File(Dir("#selfdrive/modeld").File("get_model_metadata.py").abspath)]
   cmd = f'{tg_flags} {mac_brew_string} python3 {Dir("#selfdrive/modeld").abspath}/get_model_metadata.py {fn}.onnx'
@@ -83,6 +96,6 @@ def tg_compile(flags, model_name):
   )
 
 # Compile small models
-for model_name in ['driving_vision', 'driving_policy', 'dmonitoring_model']:
+for model_name in buildable_models:
   tg_compile(tg_flags, model_name)
 
