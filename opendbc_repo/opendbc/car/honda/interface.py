@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import numpy as np
 from opendbc.car import get_safety_config, structs, uds
+from openpilot.common.params import Params
 from opendbc.car.common.conversions import Conversions as CV
 from opendbc.car.disable_ecu import disable_ecu
 from opendbc.car.honda.hondacan import CanBus
@@ -63,9 +64,22 @@ class CarInterface(CarInterfaceBase):
       # path above (radarUnavailable=True) as the safe default. alpha-long/op-long are standard for all
       # Bosch (set above). Factory AEB does NOT stay live under op-long (accepted). Fail-safe: if car_fw
       # is empty/unknown the radar stays off.
-      if candidate == CAR.HONDA_CIVIC_BOSCH and \
-         any(fw.ecu == structs.CarParams.Ecu.fwdRadar and RADAR_FW_0X280_INGEST in fw.fwVersion for fw in car_fw):
+      #
+      # "Try-out" toggle (HondaCivicRadarTryout): lets a user enable the 0x280 radar PERCEPTION on a Civic
+      # Bosch whose radar fw is NOT in the verified list, so they can validate the decode on their own car
+      # without hand-adding firmware strings. PERCEPTION-ONLY by construction (see the op-long force-off
+      # below): an unverified try-out radar may NEVER feed control.
+      _radar_tryout = candidate == CAR.HONDA_CIVIC_BOSCH and not docs and Params().get_bool("HondaCivicRadarTryout")
+      _radar_fw_match = candidate == CAR.HONDA_CIVIC_BOSCH and \
+        any(fw.ecu == structs.CarParams.Ecu.fwdRadar and RADAR_FW_0X280_INGEST in fw.fwVersion for fw in car_fw)
+      if _radar_fw_match or _radar_tryout:
         ret.radarUnavailable = False
+      # SAFETY: a try-out radar (toggle on, fw NOT verified) is a reverse-engineered, unvalidated decode —
+      # force stock ACC so it can only ever DISPLAY leads, never command braking, even if the user has
+      # alpha/experimental longitudinal enabled.
+      if _radar_tryout and not _radar_fw_match:
+        ret.openpilotLongitudinalControl = False
+        ret.pcmCruise = True
     else:
       ret.safetyConfigs = [get_safety_config(structs.CarParams.SafetyModel.hondaNidec)]
       ret.openpilotLongitudinalControl = True
