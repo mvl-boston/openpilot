@@ -75,10 +75,13 @@ class CarInterface(CarInterfaceBase):
       if _radar_fw_match or _radar_tryout:
         ret.radarUnavailable = False
       # SAFETY: a try-out radar (toggle on, fw NOT verified) is a reverse-engineered, unvalidated decode —
-      # force stock ACC so it can only ever DISPLAY leads, never command braking, even if the user has
-      # alpha/experimental longitudinal enabled.
+      # force stock ACC so it can only ever DISPLAY leads, never command braking. Triple-lock op-long OFF:
+      # also clear alphaLongitudinalAvailable so the experimental-long toggle is not even OFFERED for this
+      # car, and op-long can never be re-derived as (alpha_long and alphaLongitudinalAvailable) downstream.
+      # (Verified: no path in this tree re-enables openpilotLongitudinalControl after get_params for Honda.)
       if _radar_tryout and not _radar_fw_match:
         ret.openpilotLongitudinalControl = False
+        ret.alphaLongitudinalAvailable = False
         ret.pcmCruise = True
     else:
       ret.safetyConfigs = [get_safety_config(structs.CarParams.SafetyModel.hondaNidec)]
