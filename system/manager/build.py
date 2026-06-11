@@ -34,7 +34,7 @@ def build(spinner: Spinner, dirty: bool = False, minimal: bool = False) -> None:
   # much memory, so retry with less parallelism
   compile_output: list[bytes] = []
   for n in (nproc, nproc/2, 1):
-    compile_output.clear()
+    compile_output.append(f"--- Attempt with -j{int(n)} ---".encode('utf-8'))
     scons: subprocess.Popen = subprocess.Popen(["scons", f"-j{int(n)}", "--cache-populate", *extra_args], cwd=BASEDIR, env=env, stderr=subprocess.PIPE)
     assert scons.stderr is not None
 
@@ -55,6 +55,18 @@ def build(spinner: Spinner, dirty: bool = False, minimal: bool = False) -> None:
           print(line.decode('utf8', 'replace'))
       except Exception:
         pass
+
+    # Read remaining output for this attempt
+    try:
+      remaining = scons.stderr.read()
+      if remaining:
+        for r_line in remaining.split(b'\n'):
+          r_line = r_line.rstrip()
+          if len(r_line):
+            compile_output.append(r_line)
+            print(r_line.decode('utf8', 'replace'))
+    except Exception:
+      pass
 
     if scons.returncode == 0:
       break
