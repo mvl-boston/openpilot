@@ -34,6 +34,14 @@ Start with a baseline and dial in how the steering handles straight roads and cu
    - **What it does**: Controls extra steering stiffness specifically while driving straight at high speeds.
    - **Tuning direction**: If the car drifts on straight highways but handles curves perfectly, raise this towards **`0.7`** to lock in the center.
 
+> [!NOTE]
+> **Lateral defaults to PID-tune-only.** The live lateral learners
+> (`NrdrLearnSteerRatio`, `NrdrLearnStiffness`, `NrdrLearnAngleOffset`) and the
+> torque low-pass filter (`HondaTorqueLowPassFilter`) now default **OFF**, so the
+> PID tune (`LatPidTuneScale` / `HondaPidTuneScale`) is the only thing shaping
+> lateral control out of the box. Enable the learners/LPF manually once the base
+> tune feels dialed in.
+
 ---
 
 ### 📍 Phase 2: Stops, Starts, and Creep (The Longitudinal Core)
