@@ -328,7 +328,7 @@ class LongitudinalMpc:
     jerk_factor = get_jerk_factor(personality)
     # M5: per-personality split of the single jerk factor into (a_change, j_ego) cost
     # multipliers, live-tunable via /data/nrdr_long_tune.json; defaults reproduce stock.
-    name = PERSONALITY_NAMES.get(int(personality))
+    name = PERSONALITY_NAMES.get(personality.raw if hasattr(personality, 'raw') else int(personality))  # capnp _DynamicEnum has no int(); .raw is the ordinal (matches controlsd.py:197). hasattr keeps plain-int/static-enum callers (unit tests) working.
     a_change_factor, j_ego_factor = self.tune.jerk_factors(name, (jerk_factor, jerk_factor))
     if self.tune.low_speed_jerk_scale > 1.0:
       low_speed_scale = float(np.interp(self.x0[1], LOW_SPEED_JERK_BP, [self.tune.low_speed_jerk_scale, 1.0]))
@@ -497,7 +497,7 @@ class LongitudinalMpc:
 
   def update(self, v_cruise, modelV2, radarstate, personality=log.LongitudinalPersonality.standard):
     self.tune.refresh()
-    t_follow = max(0.9, get_T_FOLLOW(personality) + self.tune.t_follow_offset(PERSONALITY_NAMES.get(int(personality))))
+    t_follow = max(0.9, get_T_FOLLOW(personality) + self.tune.t_follow_offset(PERSONALITY_NAMES.get(personality.raw if hasattr(personality, 'raw') else int(personality))))
     comfort_brake = self.tune.comfort_brake
     v_ego = self.x0[1]
     model_leads = modelV2.leadsV3
