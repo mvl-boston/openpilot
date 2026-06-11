@@ -55,15 +55,19 @@ This phase controls how smooth the transition is when coming to a complete stop 
 
 ---
 
-### 📍 Phase 3: Advanced Filters & Driver Override
+### 📍 Phase 3: Advanced Filters, Unwinding & Driver Override
 
-These settings eliminate steering wheel vibrations and make overriding openpilot feel completely natural.
+These settings eliminate steering wheel vibrations, optimize steering wheel return-to-center behavior, and make overriding openpilot feel completely natural.
 
-1. **`HondaNotchEnabled` (Default: `ON`)**
+1. **`HondaNotchEnabled` (Default: `OFF`)**
    - **What it does**: Activates a notch filter at **`7.5 Hz`** (Q factor **`1.5`**) to isolate and eliminate high-frequency resonance and vibration in the steering rack on highway curves.
-2. **`HondaSteerDeltaLimiter` (Default: `ON`)**
+2. **`HondaSteerDeltaLimiter` (Default: `OFF`)**
    - **What it does**: Smooths out sudden steer commands. Keeps steering fluid and comfortable.
-3. **`NrdrIncreaseOverrideTolerance` (Default: `ON`)**
+3. **`HondaUnwindFreeze` (Default: `OFF`)**
+   - **What it does**: Freezes the lateral PID integrator while the steering is returning toward center, preventing it from holding extra counter-torque through the unwind.
+4. **`HondaUnwindLookahead` (Default: `OFF`)**
+   - **What it does**: Reads the model's planned path to start unwinding earlier, before the instantaneous desired curvature drops.
+5. **`NrdrIncreaseOverrideTolerance` (Default: `ON`)**
    - **What it does**: Prevents sudden dropped-torque alerts when you nudge the steering wheel. Makes steering hand-offs feel completely transparent.
 
 ---
@@ -87,6 +91,9 @@ Once your lateral control, stopping, and overrides are perfectly dialed, activat
 | **`HondaStoppingDecelRate`** | `30` | `15 - 50` | Physical brake rate clamp at the stop |
 | **`HondaStoppingDecelRateLong`**| `0.3` | `0.1 - 1.0` | Planner deceleration ramp-down rate |
 | **`HondaStopAccel`** | `-2.0` | `-3.5 - -1.0` | Static hold acceleration target (brake pressure) |
-| **`HondaNotchEnabled`** | `ON` | `ON / OFF` | 7.5 Hz notch filter for rack vibration |
-| **`HondaSteerDeltaLimiter`** | `ON` | `ON / OFF` | Jerk-reduction limiter for steering inputs |
+| **`HondaNotchEnabled`** | `OFF` | `ON / OFF` | 7.5 Hz notch filter for rack vibration |
+| **`HondaSteerDeltaLimiter`** | `OFF` | `ON / OFF` | Jerk-reduction limiter for steering inputs |
+| **`HondaUnwindFreeze`** | `OFF` | `ON / OFF` | Freezes PID integrator on steer unwind |
+| **`HondaUnwindLookahead`** | `OFF` | `ON / OFF` | Looks ahead in model path to start unwind early |
+| **`HondaLiveLearningGas`** | `ON` | `ON / OFF` | Adapts gas/wind compensation factors live |
 | **`HondaCivicRadarTryout`** | `ON` | `ON / OFF` | Fuses Bosch fine-range radar track data |
