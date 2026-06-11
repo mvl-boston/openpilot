@@ -442,6 +442,10 @@ sections:
       description: Allows Honda gas and wind compensation factors to learn live while driving.
       enablement:
       - $ref: '#/macros/offroad'
+    - key: HondaCivicRadarTryout
+      widget: toggle
+      title: Try Honda Bosch Radar (experimental)
+      description: EXPERIMENTAL — Honda Bosch radar. When ON, openpilot reads the factory Bosch radar's fine-range objects (0x280) and feeds them into the longitudinal controller.
     - key: HondaStoppingDecelRate
       widget: option
       title: Stopping Decel Rate
