@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import math
+from dataclasses import dataclass, field
 from math import pi, sin
 
 from opendbc.can import CANParser
@@ -108,8 +109,119 @@ BOSCH_RADAR_CNTR_STALL_CYCLES = 3  # frozen-CNTR cycles (while can_valid) before
 # S6 -- vRel derivation hardening. Reject a non-positive dt (already guarded) AND clamp the dt upper
 # bound: after a long gap the tiny-denominator-free path is fine but a stale baseline across a long gap
 # would derive a spurious vRel from two far-apart-in-time samples -> re-seed (drop the derivative this
-# cycle) when dt exceeds this. Keeps the EMA + VREL_MAX guard intact.
+# cycle) when dt exceeds this.
 BOSCH_RADAR_VREL_DT_MAX_S = 0.5  # s; baseline older than this -> re-seed, do not derive a vRel
+
+# D1 (nrdrbranchdebug-86t.1) -- tag-demux frame assembler. CANParser.vl is last-write-wins per signal;
+# when a 0x74 range-carrier and a non-0x74 metadata sub-frame share a header ID in one emit window, the
+# old vl read saw only the LAST frame and spuriously decayed a live track. Frames are harvested from
+# vl_all per rcp.update() batch (vl_all is cleared on every update call, while updated_messages
+# accumulates until the 0x2DC trigger) and demuxed by TRACK_TAG at emit time.
+BOSCH_RADAR_PENDING_CAP = 8  # max harvested frames retained per slot between trigger emits
+
+# R1 (nrdrbranchdebug-86t.4) -- per-slot constant-velocity [range, range_rate] Kalman filter on the raw
+# DBC-scaled RANGE, replacing the d(dRel)/dt + alpha=0.5 EMA derivation (~50-75 ms lag, LSB quantization
+# chatter, and the S6 re-seed EMA-halving bug nrdrbranchdebug-6u8, which dies with the EMA).
+BOSCH_RADAR_KF_R = 0.012          # m^2; range measurement variance (0.00357 m/LSB quantization + jitter)
+BOSCH_RADAR_KF_Q_R = 0.05         # m^2/s; range process noise density
+BOSCH_RADAR_KF_Q_V = 4.0          # (m/s)^2/s; range-rate process noise density -- err RESPONSIVE so a
+                                  # hard-braking lead is never modeled optimistic (R1 ship gate).
+                                  # Sim-tuned 2026-06-10: at -6 m/s^2 lead braking, worst optimism
+                                  # 0.88 m/s (0.8 gave 1.77); realistic-noise vRel std 0.35 m/s vs the
+                                  # old d/dt+EMA's 1.00 -- still ~3x quieter while 2x more responsive.
+BOSCH_RADAR_KF_P0_V = 1.0e4       # (m/s)^2; (re)seed range-rate variance. Large on purpose: the second
+                                  # sample then reproduces the raw derivative (old-behavior parity),
+                                  # smoothing only engages from the third sample on.
+BOSCH_RADAR_KF_NIS_ADAPT = 4.0    # 2-sigma normalized innovation; above this Q_v is inflated this step
+                                  # (noise-floor NIS is ~1e-3 at the quantization level -- huge margin)
+BOSCH_RADAR_KF_NIS_INFLATE = 10.0 # Q_v inflation factor on an adaptive step (maneuver onset)
+BOSCH_RADAR_KF_CONV_UPDATES = 2   # measurements absorbed before range_rate is published (S5 parity:
+                                  # the old path also had a derived vRel on the 2nd sighted cycle)
+BOSCH_RADAR_ACCEL_EMA_ALPHA = 0.25  # smoothing on the packed aRel (consumer is K5, radard-side, later)
+
+_KF_OK, _KF_BREAK, _KF_RESEED = 0, 1, 2
+
+
+@dataclass
+class BoschTrackRecord:
+  """D1: one slot's sub-frames for one emit window, demuxed by TRACK_TAG (stateless per window)."""
+  slot: int
+  range_frame: dict[str, float] | None = None             # latest TRACK_TAG==0x74 frame (kinematics)
+  meta_frames: dict[int, dict[str, float]] = field(default_factory=dict)  # latest frame per other tag
+  recovered_clobber: bool = False  # a 0x74 frame was present but a meta frame arrived after it (the
+                                   # exact window the old last-write-wins read would have mis-cleared)
+
+
+class _SlotRangeKF:
+  """R1: scalar 2-state CV Kalman filter, full P propagation (sweep dt jitters ~50-70 ms).
+
+  Owns the S6 contracts: dt<=0 -> skip (no double-absorb), dt>VREL_DT_MAX -> in-place reseed,
+  implied jump speed > VREL_MAX -> caller-visible BREAK (S1 incarnation bump). range_rate is
+  published only after CONV_UPDATES measurements (S5: estimate vs measurement honesty).
+  """
+  __slots__ = ("r", "v", "a", "p00", "p01", "p11", "t", "n")
+
+  def __init__(self, r0: float, t_nanos: int):
+    self._seed(r0, t_nanos)
+
+  def _seed(self, r0: float, t_nanos: int):
+    self.r = r0
+    self.v = 0.0
+    self.a = float('nan')
+    self.p00 = BOSCH_RADAR_KF_R
+    self.p01 = 0.0
+    self.p11 = BOSCH_RADAR_KF_P0_V
+    self.t = t_nanos
+    self.n = 1
+
+  @property
+  def converged(self) -> bool:
+    return self.n >= BOSCH_RADAR_KF_CONV_UPDATES
+
+  def update(self, z: float, t_nanos: int) -> int:
+    dt = (t_nanos - self.t) * 1e-9
+    if dt <= 0:
+      return _KF_OK  # non-advancing clock: keep the posterior, never absorb the same instant twice
+    if dt > BOSCH_RADAR_VREL_DT_MAX_S:
+      self._seed(z, t_nanos)  # long gap: a stale state would alias into a spurious rate
+      return _KF_RESEED
+    if abs((z - self.r) / dt) > BOSCH_RADAR_VREL_MAX:
+      return _KF_BREAK  # slot-reuse discontinuity; caller bumps incarnation and reseeds
+
+    # predict
+    r_pred = self.r + self.v * dt
+    q_v = BOSCH_RADAR_KF_Q_V * dt
+    p00 = self.p00 + 2.0 * dt * self.p01 + dt * dt * self.p11 + BOSCH_RADAR_KF_Q_R * dt
+    p01 = self.p01 + dt * self.p11
+    p11 = self.p11 + q_v
+    y = z - r_pred
+    s = p00 + BOSCH_RADAR_KF_R
+    if y * y / s > BOSCH_RADAR_KF_NIS_ADAPT:
+      # innovation-adaptive Q: maneuver onset (e.g. lead brakes hard) -> trust the model less so the
+      # rate snaps to the data instead of lagging optimistic
+      extra = BOSCH_RADAR_KF_Q_V * (BOSCH_RADAR_KF_NIS_INFLATE - 1.0) * dt
+      p11 += extra
+      p01 += extra * dt
+      p00 += extra * dt * dt
+      s = p00 + BOSCH_RADAR_KF_R
+
+    k0 = p00 / s
+    k1 = p01 / s
+    v_prev = self.v
+    self.r = r_pred + k0 * y
+    self.v = self.v + k1 * y
+    self.p00 = (1.0 - k0) * p00
+    self.p01 = (1.0 - k0) * p01
+    self.p11 = p11 - k1 * p01
+
+    # packed aRel: EMA-smoothed posterior rate delta once converged (NaN before). Payoff needs the
+    # radard-side consumer (K5); packed now so logs carry it.
+    if self.n >= BOSCH_RADAR_KF_CONV_UPDATES:
+      a_inst = (self.v - v_prev) / dt
+      self.a = a_inst if math.isnan(self.a) else (1.0 - BOSCH_RADAR_ACCEL_EMA_ALPHA) * self.a + BOSCH_RADAR_ACCEL_EMA_ALPHA * a_inst
+    self.t = t_nanos
+    self.n += 1
+    return _KF_OK
 
 
 def _create_bosch_can_parser(CP):
@@ -130,10 +242,14 @@ class RadarInterface(RadarInterfaceBase):
     # Bosch fine 0x280 track-table (Honda Civic Bosch, 36802-TBA) vs the legacy Nidec path
     self.bosch_radar = CP.carFingerprint == CAR.HONDA_CIVIC_BOSCH and Bus.radar in DBC[CP.carFingerprint]
 
-    # Per-SLOT history for vRel derivation: slot index -> (last_dRel_m, last_seen_nanos).
+    # R1: per-SLOT [range, range_rate] KF (replaces the (last_dRel, nanos) derivative baseline).
     # NOTE: keyed by SLOT (0..5), not trackId. trackId now carries an incarnation (S1) so it changes on
-    # every (re)birth; the vRel baseline must persist across that change, hence the stable slot key.
-    self._hist: dict[int, tuple[float, int]] = {}
+    # every (re)birth; the kinematic state must persist across that change, hence the stable slot key.
+    self._kf: dict[int, _SlotRangeKF] = {}
+    # D1: frames harvested from vl_all per rcp.update() batch (vl_all is wiped each call while
+    # updated_messages accumulates until the trigger), demuxed by TRACK_TAG at emit time.
+    self._pending: dict[int, list[dict[str, float]]] = {}
+    self._clobber_recovered = 0  # emit windows where a meta frame would have mis-cleared a live track
     # S2 birth/persist hysteresis: slot index -> confidence counter (Toyota valid_cnt pattern).
     self._valid_cnt: dict[int, int] = {}
     # S1 trackId no-reuse: slot index -> current incarnation (bumped on (re)birth / slot-reuse break).
@@ -174,6 +290,10 @@ class RadarInterface(RadarInterfaceBase):
 
     vls = self.rcp.update(can_strings)
     self.updated_messages.update(vls)
+    if self.bosch_radar:
+      # D1: harvest NOW -- vl_all is cleared on the next rcp.update() call, but the emit window
+      # (trigger-gated) can span several update batches.
+      self._bosch_harvest_frames(vls)
 
     if self.trigger_msg not in self.updated_messages:
       # Staleness fallback (Bosch fine only): the trigger header (sweep terminator 0x2DC) drives the
@@ -195,7 +315,8 @@ class RadarInterface(RadarInterfaceBase):
     # publishing at 20 Hz with zero points -> radard drops the lead within a cycle. Reset the trigger
     # clock so we emit the empty data exactly once until the trigger (0x2DC) returns.
     self.pts.clear()
-    self._hist.clear()
+    self._kf.clear()
+    self._pending.clear()
     self._valid_cnt.clear()
     # Do NOT reset _incarnation here: trackId no-reuse (S1) must hold across a staleness clear too, so a
     # slot that revives after going stale gets a fresh trackId rather than reusing the pre-stale one.
@@ -225,7 +346,36 @@ class RadarInterface(RadarInterfaceBase):
     self._valid_cnt[slot] = cnt
     if cnt == 0:
       self.pts.pop(slot, None)
-      self._hist.pop(slot, None)
+      self._kf.pop(slot, None)
+
+  def _bosch_harvest_frames(self, updated_addrs):
+    # D1: explode this batch's vl_all (per-signal aligned lists, one entry per parsed frame) into
+    # per-slot frame dicts, in arrival order. Stateless per emit window: drained by _update_bosch.
+    for ii in updated_addrs:
+      if ii not in BOSCH_RADAR_HDR_MSGS:
+        continue
+      vl_all = self.rcp.vl_all[ii]
+      names = list(vl_all)
+      if not names or not vl_all[names[0]]:
+        continue
+      bucket = self._pending.setdefault(BOSCH_RADAR_HDR_MSGS.index(ii), [])
+      for f in range(len(vl_all[names[0]])):
+        bucket.append({name: vl_all[name][f] for name in names})
+      del bucket[:-BOSCH_RADAR_PENDING_CAP]
+
+  def _bosch_assemble_record(self, slot) -> BoschTrackRecord:
+    # D1: demux the window's harvested frames by TRACK_TAG. The LAST 0x74 frame carries the freshest
+    # kinematics; non-0x74 frames are retained as metadata (sub-frame decode is D2's RE campaign).
+    rec = BoschTrackRecord(slot)
+    for fr in self._pending.get(slot, ()):
+      if int(fr['TRACK_TAG']) == BOSCH_RADAR_HDR_TAG:
+        rec.range_frame = fr
+        rec.recovered_clobber = False
+      else:
+        rec.meta_frames[int(fr['TRACK_TAG'])] = fr
+        if rec.range_frame is not None:
+          rec.recovered_clobber = True  # old last-write-wins read would have seen only this meta frame
+    return rec
 
   def _update_bosch(self, updated_messages):
     # FINE per-track object table (0x280 block). Fixed slot map (0x280->slot0 ... 0x2DC->slot5).
@@ -272,11 +422,14 @@ class RadarInterface(RadarInterfaceBase):
         self._bosch_clear_slot(slot)
         continue
 
-      cpt = self.rcp.vl[ii]
-
-      # Gate b1==0x74: only the range-carrier header sub-frame carries RANGE. Any other tag is a
-      # non-range sub-frame mux'd onto this ID -> skip (clear the slot; do not read RANGE).
-      if int(cpt['TRACK_TAG']) != BOSCH_RADAR_HDR_TAG:
+      # D1: tag-demux over ALL frames this window (vl is last-write-wins; a metadata sub-frame landing
+      # after the 0x74 range-carrier used to mis-clear a LIVE track here). Only a window with NO
+      # range-carrier at all is a genuine miss.
+      rec = self._bosch_assemble_record(slot)
+      if rec.recovered_clobber:
+        self._clobber_recovered += 1
+      cpt = rec.range_frame
+      if cpt is None:
         self._bosch_clear_slot(slot)
         continue
 
@@ -306,51 +459,27 @@ class RadarInterface(RadarInterfaceBase):
       was_vacant = self._valid_cnt.get(slot, 0) == 0
       if was_vacant:
         self._incarnation[slot] = self._incarnation.get(slot, 0) + 1
-        self._hist.pop(slot, None)
+        self._kf.pop(slot, None)
 
       # S2 birth/persist hysteresis: this is a valid range-carrier frame -> +1 (saturating). A point is
       # only emitted once the counter reaches BORN_CYCLES (debounces a 1-frame glitch into a phantom).
       self._valid_cnt[slot] = min(self._valid_cnt.get(slot, 0) + 1, BOSCH_RADAR_VALID_CAP)
 
-      # vRel derived as d(dRel)/dt per SLOT (closing negative). NaN on first sight, non-advancing clock,
-      # or a re-seed. Light EMA smoothing (alpha=0.5) tames LSB quantization noise at the cost of lag.
-      vRel = float('nan')
-      non_advancing = False  # True only when the clock did not advance (dt <= 0) -> keep the old baseline
-      prev = self._hist.get(slot)
-      if prev is not None:
-        last_dRel, last_nanos = prev
-        dt = (now - last_nanos) * 1e-9
-        # S6: reject non-positive dt (non-advancing clock) AND clamp the upper bound -- a baseline older
-        # than DT_MAX (a long gap) would derive a spurious vRel from two far-apart-in-time samples, so
-        # leave vRel NaN and re-seed instead of deriving.
-        if dt <= 0:
-          non_advancing = True
-        elif dt > BOSCH_RADAR_VREL_DT_MAX_S:
-          pass  # long-gap re-seed: vRel stays NaN; the baseline is refreshed below for the NEXT cycle
-        else:
-          raw_vRel = (dRel - last_dRel) / dt
-          if abs(raw_vRel) > BOSCH_RADAR_VREL_MAX:
-            # Slot-reuse discontinuity: this slot now carries a DIFFERENT physical object even though it
-            # was continuously sighted (a dRel jump with no intervening vacant cycle, so the 0->1 rebirth
-            # path above did NOT fire). The implied speed is non-physical -> treat as a track BREAK (S1):
-            # bump the incarnation so radard sees a NEW trackId, and drop the stale point so it is
-            # re-created under that new id this cycle. The confidence counter is left intact (the slot is
-            # still occupied). vRel stays NaN this cycle; the NEXT clean cycle derives a real vRel from
-            # the re-seeded baseline.
-            self._incarnation[slot] = self._incarnation.get(slot, 0) + 1
-            self.pts.pop(slot, None)
-          else:
-            # If we already have a prior vRel on the (surviving) point, blend; else seed with the raw est.
-            prev_pt = self.pts.get(slot)
-            if prev_pt is not None and prev_pt.vRel == prev_pt.vRel:  # not NaN
-              vRel = 0.5 * prev_pt.vRel + 0.5 * raw_vRel
-            else:
-              vRel = raw_vRel
-      # Refresh the per-slot baseline to this sample UNLESS the clock did not advance (dt <= 0), in which
-      # case keep the existing baseline (overwriting with an identical timestamp would never derive a vRel).
-      # A long-gap re-seed and a discontinuity break both DO refresh, so the NEXT cycle derives cleanly.
-      if not non_advancing:
-        self._hist[slot] = (dRel, now)
+      # R1: per-slot [range, range_rate] KF on the raw range (replaces d(dRel)/dt + EMA). The filter
+      # owns the S6 contracts (dt<=0 skip, long-gap reseed); the BREAK return keeps the S1 slot-reuse
+      # semantics: bump the incarnation so radard sees a NEW trackId, drop the stale point so it is
+      # re-created under that id this cycle, and reseed the filter at the new object's range.
+      kf = self._kf.get(slot)
+      if kf is None:
+        kf = self._kf[slot] = _SlotRangeKF(dRel, now)
+      else:
+        status = kf.update(dRel, now)
+        if status == _KF_BREAK:
+          self._incarnation[slot] = self._incarnation.get(slot, 0) + 1
+          self.pts.pop(slot, None)
+          kf = self._kf[slot] = _SlotRangeKF(dRel, now)
+      # S5: range_rate is an estimate until the filter has absorbed enough measurements -> NaN before
+      vRel = kf.v if kf.converged else float('nan')
 
       # S2 gate: do not emit until the slot is confidently born.
       if self._valid_cnt[slot] < BOSCH_RADAR_BORN_CYCLES:
@@ -362,7 +491,6 @@ class RadarInterface(RadarInterfaceBase):
       if slot not in self.pts:
         self.pts[slot] = structs.RadarData.RadarPoint()
         self.pts[slot].trackId = self._bosch_trackid(slot)
-        self.pts[slot].aRel = float('nan')
         self.pts[slot].yvRel = float('nan')
 
       self.pts[slot].dRel = dRel
@@ -374,12 +502,17 @@ class RadarInterface(RadarInterfaceBase):
       az_deg = cpt['LAT_RAW'] * BOSCH_RADAR_LAT_SCALE_DEG_PER_LSB
       self.pts[slot].yRel = -dRel * sin(az_deg * pi / 180.0)
       self.pts[slot].vRel = vRel
+      # R1: pack the KF's smoothed range-accel into aRel (NaN until the filter is converged AND has a
+      # rate history). RX-only telemetry; the radard-side consumer is K5 (deferred).
+      self.pts[slot].aRel = kf.a
       # S5 honest measured flag: vRel is a DERIVED estimate, so flag the point as an estimate (measured=
       # False) whenever vRel is not yet a valid derived value (first-sight/re-seed NaN). dRel/yRel are
       # real measurements, but the capnp measured bit is about point-as-measurement-vs-estimate, and our
       # headline kinematic (vRel) is derived -- True only once a stable derived vRel exists.
       self.pts[slot].measured = not math.isnan(vRel)
 
+    # D1: the emit window is consumed; the next window's frames are harvested fresh from vl_all.
+    self._pending.clear()
     ret.points = list(self.pts.values())
     return ret
 

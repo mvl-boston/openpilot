@@ -28,8 +28,10 @@ MIN_ALLOW_THROTTLE_SPEED = 2.5
 _A_TOTAL_MAX_V = [1.7, 3.2]
 _A_TOTAL_MAX_BP = [20., 40.]
 
-def get_max_accel(v_ego):
-  return np.interp(v_ego, A_CRUISE_MAX_BP, A_CRUISE_MAX_VALS)
+def get_max_accel(v_ego, scale=None):
+  # NRDR live tune (a_cruise_max_scale): per-breakpoint scaling, hard-capped at ACCEL_MAX
+  vals = A_CRUISE_MAX_VALS if scale is None else np.minimum(np.array(A_CRUISE_MAX_VALS) * scale, ACCEL_MAX)
+  return np.interp(v_ego, A_CRUISE_MAX_BP, vals)
 
 def get_coast_accel(pitch):
   return np.sin(pitch) * -5.65 - 0.3  # fitted from data using xx/projects/allow_throttle/compute_coast_accel.py
@@ -118,7 +120,7 @@ class LongitudinalPlanner(LongitudinalPlannerSP):
     # No change cost when user is controlling the speed, or when standstill
     prev_accel_constraint = not (reset_state or sm['carState'].standstill)
 
-    accel_clip = [ACCEL_MIN, get_max_accel(v_ego)]
+    accel_clip = [ACCEL_MIN, get_max_accel(v_ego, self.mpc.tune.a_cruise_max_scale)]
     steer_angle_without_offset = sm['carState'].steeringAngleDeg - sm['liveParameters'].angleOffsetDeg
     accel_clip = limit_accel_in_turns(v_ego, steer_angle_without_offset, accel_clip, self.CP)
 

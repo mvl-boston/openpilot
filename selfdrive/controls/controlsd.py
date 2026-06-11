@@ -139,7 +139,14 @@ class Controls(ControlsExt):
 
     # accel PID loop
     pid_accel_limits = self.CI.get_pid_accel_limits(self.CP, self.CP_SP, CS.vEgo, CS.vCruise * CV.KPH_TO_MS)
-    actuators.accel = float(self.LoC.update(CC.longActive, CS, long_plan.aTarget, long_plan.shouldStop, pid_accel_limits))
+    # Bundle D / L2 plumbing: pitch from the calibrated pose (same source as CC.orientationNED[1],
+    # which is only set later in publish()), and current lead distance from the longitudinal plan
+    # (leadTrajectoryX0[0] == lead_xv_0[:,0][0], slot leadOne). Both are optional and isfinite-gated
+    # downstream; None => stock stopping behavior. No new SubMaster service, no capnp change.
+    long_pitch = float(self.calibrated_pose.orientation.xyz[1]) if self.calibrated_pose is not None else None
+    long_drel = float(long_plan.leadTrajectoryX0[0]) if (long_plan.hasLead and len(long_plan.leadTrajectoryX0) > 0) else None
+    actuators.accel = float(self.LoC.update(CC.longActive, CS, long_plan.aTarget, long_plan.shouldStop, pid_accel_limits,
+                                            pitch=long_pitch, drel=long_drel))
 
     # Steering PID loop and lateral MPC
     # Reset desired curvature to current to avoid violating the limits on engage
