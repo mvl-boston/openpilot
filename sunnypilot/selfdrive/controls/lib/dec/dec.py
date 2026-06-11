@@ -100,8 +100,13 @@ class ModeTransitionManager:
       if m != mode:
         self.mode_confidence[m] = max(0.0, self.mode_confidence[m] - 0.05)
 
-    # Require minimum duration in current mode (unless emergency)
-    if self.mode_duration < self.min_mode_duration and not self.emergency_override:
+    # Require minimum duration in current mode. An active emergency override holds
+    # ONLY its own mode; an OPPOSING non-emergency request must still respect the
+    # dwell. Otherwise the override is flick-cancelled the moment urgency dips below
+    # the emergency threshold, and the mode chatters acc<->blended at SET_MODE_TIMEOUT
+    # frequency (nrdrbranchdebug DEC flip-flop fix; was: `not self.emergency_override`).
+    override_holds = self.emergency_override and mode == self.current_mode
+    if self.mode_duration < self.min_mode_duration and not override_holds:
       return
 
     # Hysteresis: higher threshold for mode changes
@@ -259,7 +264,9 @@ class DynamicExperimentalController:
 
       self._slow_down_filter.add_data(urgency)
       urgency_filtered = self._slow_down_filter.get_value() or 0.0
-      self._has_slow_down = urgency_filtered > WMACConstants.SLOW_DOWN_PROB
+      # enter/exit hysteresis (see valid-trajectory branch below)
+      slow_thr = WMACConstants.SLOW_DOWN_PROB * (0.625 if self._has_slow_down else 1.0)
+      self._has_slow_down = urgency_filtered > slow_thr
       self._urgency = urgency_filtered
       return
 
@@ -298,8 +305,11 @@ class DynamicExperimentalController:
     self._slow_down_filter.add_data(urgency)
     urgency_filtered = self._slow_down_filter.get_value() or 0.0
 
-    # Update state with lower threshold for better stop detection
-    self._has_slow_down = urgency_filtered > (WMACConstants.SLOW_DOWN_PROB * 0.8)
+    # Enter/exit hysteresis: once slowing, require a LOWER level to clear, so urgency
+    # hovering at the threshold can't toggle the mode every frame (DEC flip-flop fix;
+    # mirrors the _has_slowness hysteresis pattern above).
+    slow_thr = WMACConstants.SLOW_DOWN_PROB * (0.5 if self._has_slow_down else 0.8)
+    self._has_slow_down = urgency_filtered > slow_thr
     self._urgency = urgency_filtered
 
   def _radarless_mode(self) -> None:
