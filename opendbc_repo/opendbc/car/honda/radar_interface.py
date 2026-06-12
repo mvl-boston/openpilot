@@ -20,16 +20,24 @@ def _create_nidec_can_parser(car_fingerprint):
 # Cross-car CONFIRMED 2026-06-07 (3 cars / 6 routes; 8905 tracks fused leadOne.dRel at R^2=0.975).
 # This SUPERSEDES the coarse 0x2C8/0x2C9 selected-lead as the range source: the radar broadcasts up to
 # 6 track records, each a 4-frame burst on consecutive IDs. Only the HEADER ID of each record carries
-# RANGE, and only on the sub-frame tagged b1==0x74. The parser gates on that tag, skips idle/saturation
+# RANGE, and only on the sub-frame tagged b1==0x74 (moving) OR b1==0x94 (stationary/decelerating motion
+# class). Both share the SAME byte layout; the tag high nibble encodes motion class (7=moving, 9=stationary).
+# The parser gates on BOSCH_RADAR_HDR_TAG_SET, skips idle/saturation
 # sentinels, emits up to 6 RadarPoints (stable trackId per slot), and lets radard select the lead.
 # IMPORTANT: these object frames are physically on openpilot CanBus.camera (rlog src=2, confirmed
 # across 6 routes), NOT CanBus.radar (bus 0). The Bus.radar key below is only the DBC-name lookup;
 # the parser's CAN bus is CanBus(CP).camera. Reconfirm the bus with a read-only sniff before trusting dRel.
 BOSCH_RADAR_HDR_MSGS = [0x280, 0x284, 0x2D0, 0x2D4, 0x2D8, 0x2DC]
 
-# Range-carrier header tag: only sub-frames with b1==0x74 carry RANGE in b2:b3. Any other tag is a
-# non-range sub-frame mux'd onto the header ID -> skip (do not read RANGE).
-BOSCH_RADAR_HDR_TAG = 0x74
+# Range-carrier header tags: sub-frames with b1==0x74 (moving) OR b1==0x94 (stationary/decelerating
+# motion class) carry RANGE in b2:b3 with the SAME byte layout. High nibble = motion class (7=moving,
+# 9=stationary); low nibble 0x4 = range carrier. 0x94 was the dominant tag during real stops
+# (corpus: unmatched-stop windows 0x94:642 vs 0x74:1) -- the old 0x74-only gate dropped every stop
+# frame as metadata -> no RadarPoint -> vision-only during stops (nrdrbranchdebug-73z).
+# 0x34 is NOT admitted (corpus r weak/unvalidated -- documented coverage gap).
+# BOSCH_RADAR_HDR_TAG is kept for the canonical/primary-tag reference (tests + DBC decode asserts).
+BOSCH_RADAR_HDR_TAG = 0x74       # moving-class range carrier (canonical; kept for backward compat)
+BOSCH_RADAR_HDR_TAG_SET = frozenset({0x74, 0x94})  # allow-list: 0x74 moving + 0x94 stationary
 
 # Idle / unset / saturation sentinels (any one -> not an active track). STRENGTH is b0 raw (idle 0xFE),
 # RANGE_RAW is b2:b3 raw int (0x8000 ~114 m unset; >=0xFF80 ~230 m saturation rail).
@@ -113,7 +121,7 @@ BOSCH_RADAR_CNTR_STALL_CYCLES = 3  # frozen-CNTR cycles (while can_valid) before
 BOSCH_RADAR_VREL_DT_MAX_S = 0.5  # s; baseline older than this -> re-seed, do not derive a vRel
 
 # D1 (nrdrbranchdebug-86t.1) -- tag-demux frame assembler. CANParser.vl is last-write-wins per signal;
-# when a 0x74 range-carrier and a non-0x74 metadata sub-frame share a header ID in one emit window, the
+# when a range-carrier (0x74/0x94) and a metadata sub-frame share a header ID in one emit window, the
 # old vl read saw only the LAST frame and spuriously decayed a live track. Frames are harvested from
 # vl_all per rcp.update() batch (vl_all is cleared on every update call, while updated_messages
 # accumulates until the 0x2DC trigger) and demuxed by TRACK_TAG at emit time.
@@ -146,10 +154,11 @@ _KF_OK, _KF_BREAK, _KF_RESEED = 0, 1, 2
 class BoschTrackRecord:
   """D1: one slot's sub-frames for one emit window, demuxed by TRACK_TAG (stateless per window)."""
   slot: int
-  range_frame: dict[str, float] | None = None             # latest TRACK_TAG==0x74 frame (kinematics)
+  range_frame: dict[str, float] | None = None             # latest TRACK_TAG in {0x74,0x94} frame (kinematics)
   meta_frames: dict[int, dict[str, float]] = field(default_factory=dict)  # latest frame per other tag
-  recovered_clobber: bool = False  # a 0x74 frame was present but a meta frame arrived after it (the
-                                   # exact window the old last-write-wins read would have mis-cleared)
+  recovered_clobber: bool = False  # a range-carrier (0x74/0x94) frame was present but a meta frame
+                                   # arrived after it (the exact window the old last-write-wins read
+                                   # would have mis-cleared)
 
 
 class _SlotRangeKF:
@@ -364,11 +373,14 @@ class RadarInterface(RadarInterfaceBase):
       del bucket[:-BOSCH_RADAR_PENDING_CAP]
 
   def _bosch_assemble_record(self, slot) -> BoschTrackRecord:
-    # D1: demux the window's harvested frames by TRACK_TAG. The LAST 0x74 frame carries the freshest
-    # kinematics; non-0x74 frames are retained as metadata (sub-frame decode is D2's RE campaign).
+    # D1: demux the window's harvested frames by TRACK_TAG. The LAST frame in BOSCH_RADAR_HDR_TAG_SET
+    # (0x74 moving OR 0x94 stationary) carries the freshest kinematics; both use the SAME byte layout.
+    # Non-range-carrier frames are retained as metadata (sub-frame decode is D2's RE campaign).
+    # 73z fix: 0x94 (stationary motion class) is now classified as a range_frame, NOT a meta_frame,
+    # so a stopped/decelerating lead's range carrier is no longer dropped during stops.
     rec = BoschTrackRecord(slot)
     for fr in self._pending.get(slot, ()):
-      if int(fr['TRACK_TAG']) == BOSCH_RADAR_HDR_TAG:
+      if int(fr['TRACK_TAG']) in BOSCH_RADAR_HDR_TAG_SET:
         rec.range_frame = fr
         rec.recovered_clobber = False
       else:
@@ -423,7 +435,7 @@ class RadarInterface(RadarInterfaceBase):
         continue
 
       # D1: tag-demux over ALL frames this window (vl is last-write-wins; a metadata sub-frame landing
-      # after the 0x74 range-carrier used to mis-clear a LIVE track here). Only a window with NO
+      # after a range-carrier (0x74/0x94) used to mis-clear a LIVE track here). Only a window with NO
       # range-carrier at all is a genuine miss.
       rec = self._bosch_assemble_record(slot)
       if rec.recovered_clobber:
