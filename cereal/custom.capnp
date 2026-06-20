@@ -371,6 +371,16 @@ struct CarControlSP @0xa5cd762cd951a455 {
   leadOne @2 :LeadData;
   leadTwo @3 :LeadData;
   intelligentCruiseButtonManagement @4 :IntelligentCruiseButtonManagement;
+  dashPath @5 :DashPath;
+
+  struct DashPath {
+    valid @0 :Bool;
+    poly @1 :List(Float32);        # lane-center cubic [c0, c1, c2, c3]; y = c0 + c1*x + c2*x^2 + c3*x^3 (m, +left)
+    reach @2 :Float32;             # rendered length fraction: 1 = full, 0 = no lane
+    laneCross @3 :Int8;            # lane-cross pulse: 0 none, +1 right, -1 left
+    leftLine @4 :Bool;
+    rightLine @5 :Bool;
+  }
 
   struct Param {
     key @0 :Text;
