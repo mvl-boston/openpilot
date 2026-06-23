@@ -12,7 +12,7 @@ import cereal.messaging as messaging
 from cereal import log, custom
 
 from opendbc.car import structs
-from opendbc.sunnypilot.car.honda.lane_path import LANE_LENGTH_MAX_VALUE
+from opendbc.car.honda.lane_path import LANE_LENGTH_MAX_VALUE
 from openpilot.common.params import Params
 from openpilot.common.swaglog import cloudlog
 from openpilot.sunnypilot import PARAMS_UPDATE_PERIOD
