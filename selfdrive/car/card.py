@@ -224,11 +224,11 @@ class Car:
     """control update loop, driven by carControl"""
 
     if not self.initialized_prev:
-      # Initialize CarInterface, once controls are ready
-      # TODO: this can make us miss at least a few cycles when doing an ECU knockout
-      self.CI.init(self.CP, *self.can_callbacks)
-      # signal pandad to switch to car safety mode
+      # arm car safety first: pandad switches the panda out of elm327 while
+      # CI.init's UDS handshake is still running, so openpilot's radar
+      # look-alikes hit the wire the moment the radar goes silent
       self.params.put_bool("ControlsReady", True)
+      self.CI.init(self.CP, *self.can_callbacks)
 
     if self.sm.all_alive(['carControl']):
       # send car controls over can
