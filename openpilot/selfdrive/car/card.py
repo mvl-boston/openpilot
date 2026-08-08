@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import inspect
 import os
 import time
 import threading
@@ -121,6 +122,13 @@ class Car:
     else:
       self.CI, self.CP, self.CP_SP = CI, CI.CP, CI.CP_SP
       self.RI = RI
+
+    # opendbc versions prior to the modelV2 support don't accept the model argument in apply().
+    # Detect support so an out-of-sync opendbc_repo submodule degrades gracefully instead of crashing card.
+    self.ci_apply_supports_model = 'model' in inspect.signature(self.CI.apply).parameters
+    if not self.ci_apply_supports_model:
+      cloudlog.error("opendbc CarInterfaceBase.apply() does not accept a model argument; "
+                     "update the opendbc_repo submodule (git submodule sync && git submodule update --init)")
 
     self.CP.alternativeExperience = 0
     # mads
@@ -280,8 +288,11 @@ class Car:
     if self.sm.all_alive(['carControl']):
       # send car controls over can
       now_nanos = self.can_log_mono_time if REPLAY else int(time.monotonic() * 1e9)
-      model = self.sm['modelV2'] if self.sm.valid['modelV2'] else None
-      self.last_actuators_output, can_sends = self.CI.apply(CC, convert_carControlSP(CC_SP), now_nanos, model)
+      if self.ci_apply_supports_model:
+        model = self.sm['modelV2'] if self.sm.valid['modelV2'] else None
+        self.last_actuators_output, can_sends = self.CI.apply(CC, convert_carControlSP(CC_SP), now_nanos, model)
+      else:
+        self.last_actuators_output, can_sends = self.CI.apply(CC, convert_carControlSP(CC_SP), now_nanos)
       self.pm.send('sendcan', can_list_to_can_capnp(can_sends, msgtype='sendcan', valid=CS.canValid))
 
       self.CC_prev = CC
