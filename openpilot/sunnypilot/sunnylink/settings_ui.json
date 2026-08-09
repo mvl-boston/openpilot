@@ -2168,6 +2168,24 @@
     }
   ],
   "vehicle_settings": {
+    "honda": {
+      "title": "Honda / Acura Settings",
+      "description": "",
+      "items": [
+        {
+          "key": "HondaEnforceStockLongitudinal",
+          "widget": "toggle",
+          "needs_onroad_cycle": true,
+          "title": "Honda Nidec: Enforce Factory Longitudinal Control",
+          "description": "sunnypilot will not take over control of gas and brakes. Factory Honda Nidec longitudinal control will be used.",
+          "enablement": [
+            {
+              "type": "not_engaged"
+            }
+          ]
+        }
+      ]
+    },
     "hyundai": {
       "title": "Hyundai / Kia / Genesis Settings",
       "description": "",
