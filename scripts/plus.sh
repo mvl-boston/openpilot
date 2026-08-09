@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 PARAM="/data/params/d_tmp/CameraOffset"
 INCREMENT=0.02
