@@ -82,6 +82,11 @@ jobs:
     runs-on: ${{ ((github.repository == 'commaai/openpilot') && ((github.event_name != 'pull_request') || (github.event.pull_request.head.repo.full_name == 'commaai/openpilot'))) && 'namespace-profile-macos-8x14' || 'macos-latest' }}
     steps:
     - uses: actions/checkout@v7
+      with:
+        # clone submodules here (authenticated with GITHUB_TOKEN) instead of in
+        # op.sh setup: anonymous clones sporadically get rate-limited on the
+        # shared macOS runners ("could not read Username for 'https://github.com'")
+        submodules: recursive
     - name: Remove Homebrew from environment
       run: |
         FILTERED=$(echo "$PATH" | tr ':' '\n' | grep -v '/opt/homebrew' | tr '\n' ':')
