@@ -53,25 +53,25 @@ class DeveloperLayoutSP(DeveloperLayout):
 
     self.error_log_btn = button_item(tr("Error Log"), tr("VIEW"), tr("View the error log for sunnypilot crashes."), callback=self._on_error_log_clicked)
 
-    self.lane_centering_toggle = toggle_item_sp(tr("SLC (StarPilot Lane Centering)"),
-                                                tr("StarPilot Lane Centering (SLC): experimentally bias the model command toward the detected lane " +
+    self.lane_centering_toggle = toggle_item_sp(tr("SPLC (StarPilot Lane Centering)"),
+                                                tr("StarPilot Lane Centering (SPLC): experimentally bias the model command toward the detected lane " +
                                                    "center. Requires two confident lane lines and remains subject to normal curvature and jerk " +
                                                    "limits. Ported from StarPilot."), param="LaneCentering")
 
     # this param defaults to enabled, so it can't use the ToggleSP param binding (get_bool returns False when unset)
-    self.lane_centering_pause_toggle = toggle_item_sp(tr("SLC Pause on Turn Signal"),
+    self.lane_centering_pause_toggle = toggle_item_sp(tr("SPLC Pause on Turn Signal"),
                                                       tr("Fade the lane-centering correction out when a turn signal is active so it does not fight " +
                                                          "a lane change or turn."),
                                                       initial_state=bool(ui_state.params.get("LaneCenteringPauseOnSignal", return_default=True)),
                                                       callback=self._on_slc_pause_on_signal)
 
-    self.lane_center_offset_control = option_item_sp(tr("SLC Center Offset"), "LaneCenterOffset", -30, 30,
+    self.lane_center_offset_control = option_item_sp(tr("SPLC Center Offset"), "LaneCenterOffset", -30, 30,
                                                      tr("Shift the lane-centering target left or right of the lane center. The controller " +
                                                         "automatically reduces the offset when the detected lane is narrow."),
                                                      label_width=style.BUTTON_ACTION_WIDTH, use_float_scaling=True,
                                                      label_callback=lambda v: f"{v / 100:.2f} m")
 
-    self.lane_centering_e2e_authority_control = option_item_sp(tr("SLC E2E Override"), "LaneCenteringE2EAuthority", 0, 100,
+    self.lane_centering_e2e_authority_control = option_item_sp(tr("SPLC E2E Override"), "LaneCenteringE2EAuthority", 0, 100,
                                                                tr("How strongly a confident end-to-end model path can override lane centering when it " +
                                                                   "deliberately departs the lane center. 100% gives the model full authority; " +
                                                                   "0% disables break-in."),
