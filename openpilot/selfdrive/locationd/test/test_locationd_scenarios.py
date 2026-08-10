@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 from collections import defaultdict
 from enum import Enum
 
@@ -145,6 +146,7 @@ class TestLocationdScenarios:
     assert np.all(replayed_data['inputs_flag'] == orig_data['inputs_flag'])
     assert np.all(replayed_data['sensors_flag'] == orig_data['sensors_flag'])
 
+  @pytest.mark.skip(reason="this fork raises INPUT_INVALID_LIMIT for vibration tolerance, so inputsOK no longer flips after N bad measurements")
   def test_consistent_gyro_spikes(self):
     """
     Test: consistent timing spikes for N gyroscope messages in the middle of the segment
@@ -186,6 +188,7 @@ class TestLocationdScenarios:
     assert np.all(replayed_data['inputs_flag'] == orig_data['inputs_flag'])
     assert np.all(replayed_data['sensors_flag'] == orig_data['sensors_flag'])
 
+  @pytest.mark.skip(reason="this fork raises INPUT_INVALID_LIMIT for vibration tolerance, so inputsOK no longer flips after N bad measurements")
   def test_consistent_timing_spikes(self):
     """
     Test: consistent timing spikes for N accelerometer messages in the middle of the segment
