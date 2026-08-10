@@ -144,13 +144,14 @@ class BigButton(BaseButton):
 
   def __init__(self, text: str, value: str = "", icon: Union[rl.Texture, None] = None, scroll: bool = False,
                *, description: str = "",
-               description_icon: Union[rl.Texture, None] = None):
+               description_icon: Union[rl.Texture, None] = None, font_size: int | None = None):
     super().__init__(description, text, description_icon or icon or None)
     self.set_rect(rl.Rectangle(0, 0, 402, 180))
     self.text = text
     self.value = value
     self._txt_icon = icon
     self._scroll = scroll
+    self._font_size_override = font_size
 
     self._scale_filter = BounceFilter(1.0, 0.1, 1 / gui_app.target_fps)
     self._click_delay = 0.075
@@ -193,6 +194,8 @@ class BigButton(BaseButton):
     return int(self._rect.width - self.LABEL_HORIZONTAL_PADDING * 2)
 
   def _get_label_font_size(self):
+    if self._font_size_override is not None:
+      return self._font_size_override
     if len(self.text) <= 18:
       return 48
     else:
@@ -292,8 +295,8 @@ class BigButton(BaseButton):
 class BigToggle(BigButton):
   def __init__(self, text: str, value: str = "", initial_state: bool = False, toggle_callback: Callable | None = None,
                *, description: str = "",
-               description_icon: Union[rl.Texture, None] = None):
-    super().__init__(text, value, "", description=description, description_icon=description_icon)
+               description_icon: Union[rl.Texture, None] = None, font_size: int | None = None):
+    super().__init__(text, value, "", description=description, description_icon=description_icon, font_size=font_size)
     self._checked = initial_state
     self._toggle_callback = toggle_callback
 
@@ -328,8 +331,9 @@ class BigToggle(BigButton):
 
 class BigMultiToggle(BigToggle):
   def __init__(self, text: str, options: list[str], toggle_callback: Callable | None = None,
-               select_callback: Callable | None = None, *, description: str = "", description_icon: Union[rl.Texture, None] = None):
-    super().__init__(text, "", toggle_callback=toggle_callback, description=description, description_icon=description_icon)
+               select_callback: Callable | None = None, *, description: str = "", description_icon: Union[rl.Texture, None] = None,
+               font_size: int | None = None):
+    super().__init__(text, "", toggle_callback=toggle_callback, description=description, description_icon=description_icon, font_size=font_size)
     assert len(options) > 0
     self._options = options
     self._select_callback = select_callback
@@ -353,9 +357,14 @@ class BigMultiToggle(BigToggle):
     x = self._rect.x + self._rect.width - self._txt_enabled_toggle.width
     y = btn_y
 
+    # compress the pill stack when there are too many options to fit at the default spacing
+    spacing = 35
+    if len(self._options) > 1:
+      spacing = min(spacing, int((self._rect.height - self._txt_enabled_toggle.height) / (len(self._options) - 1)))
+
     for i in range(len(self._options)):
       self._draw_pill(x, y, checked_idx == i)
-      y += 35
+      y += spacing
 
 
 class GreyBigButton(BigButton):
