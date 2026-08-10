@@ -85,6 +85,10 @@ class DeveloperLayoutMici(NavScroller):
     self._debug_mode_toggle = BigParamControl("ui debug mode", "ShowDebugInfo",
                                               toggle_callback=lambda checked: (gui_app.set_show_touches(checked),
                                                                                gui_app.set_show_fps(checked)))
+    self._lane_centering_toggle = BigParamControl("lane centering", "LaneCentering")
+    self._lane_centering_pause_toggle = BigToggle("pause centering on signal",
+                                                  initial_state=bool(ui_state.params.get("LaneCenteringPauseOnSignal", return_default=True)),
+                                                  toggle_callback=self._on_lane_centering_pause_on_signal)
 
     self._scroller.add_widgets([
       self._adb_toggle,
@@ -95,6 +99,8 @@ class DeveloperLayoutMici(NavScroller):
       self._lat_maneuver_toggle,
       self._alpha_long_toggle,
       self._debug_mode_toggle,
+      self._lane_centering_toggle,
+      self._lane_centering_pause_toggle,
     ])
 
     # Toggle lists
@@ -106,6 +112,7 @@ class DeveloperLayoutMici(NavScroller):
       ("LateralManeuverMode", self._lat_maneuver_toggle),
       ("AlphaLongitudinalEnabled", self._alpha_long_toggle),
       ("ShowDebugInfo", self._debug_mode_toggle),
+      ("LaneCentering", self._lane_centering_toggle),
     )
     onroad_blocked_toggles = (self._adb_toggle, self._joystick_toggle)
     release_blocked_toggles = (self._joystick_toggle, self._long_maneuver_toggle, self._lat_maneuver_toggle, self._alpha_long_toggle)
@@ -160,6 +167,12 @@ class DeveloperLayoutMici(NavScroller):
     # Refresh toggles from params to mirror external changes
     for key, item in self._refresh_toggles:
       item.set_checked(ui_state.params.get_bool(key))
+
+    # this param defaults to enabled, so read it with its declared default
+    self._lane_centering_pause_toggle.set_checked(bool(ui_state.params.get("LaneCenteringPauseOnSignal", return_default=True)))
+
+  def _on_lane_centering_pause_on_signal(self, state: bool):
+    ui_state.params.put_bool("LaneCenteringPauseOnSignal", state, block=True)
 
   def _on_joystick_debug_mode(self, state: bool):
     ui_state.params.put_bool("JoystickDebugMode", state, block=True)
