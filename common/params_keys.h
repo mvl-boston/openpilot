@@ -74,6 +74,7 @@ inline static std::unordered_map<std::string, ParamKeyAttributes> keys = {
     {"HondaLatAccelFactor50Params", {PERSISTENT, FLOAT}},
     {"HondaLatAccelFactor55Params", {PERSISTENT, FLOAT}},
     {"HondaLatAccelFactor60Params", {PERSISTENT, FLOAT}},
+    {"HondaSatAccelParams", {PERSISTENT, FLOAT}},
     {"InstallDate", {PERSISTENT, TIME}},
     {"IsDriverViewEnabled", {CLEAR_ON_MANAGER_START, BOOL}},
     {"IsEngaged", {PERSISTENT, BOOL}},
