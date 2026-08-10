@@ -79,7 +79,7 @@ class LaneCenteringController:
 
   @staticmethod
   def _valid_path(x, y) -> bool:
-    return x.size >= 2 and x.size == y.size and np.isfinite(x).all() and np.isfinite(y).all() and np.all(np.diff(x) > 0)
+    return bool(x.size >= 2 and x.size == y.size and np.isfinite(x).all() and np.isfinite(y).all() and np.all(np.diff(x) > 0))
 
   @staticmethod
   def _covers(x, distance: float) -> bool:
