@@ -92,10 +92,11 @@ class DeveloperLayoutMici(NavScroller):
     self._lane_centering_pause_toggle = BigToggle("SLC pause on signal",
                                                   initial_state=bool(ui_state.params.get("LaneCenteringPauseOnSignal", return_default=True)),
                                                   toggle_callback=self._on_lane_centering_pause_on_signal)
+    # explicit font sizes: at the defaults these labels wrap enough to hide the selected-value line
     self._lane_center_offset_toggle = BigMultiToggle("SLC center offset", list(LANE_CENTER_OFFSET_LABELS),
-                                                     select_callback=self._on_lane_center_offset)
+                                                     select_callback=self._on_lane_center_offset, font_size=42)
     self._lane_centering_e2e_authority_toggle = BigMultiToggle("SLC e2e override strength", list(LANE_CENTERING_E2E_AUTHORITY_LABELS),
-                                                               select_callback=self._on_lane_centering_e2e_authority)
+                                                               select_callback=self._on_lane_centering_e2e_authority, font_size=28)
 
     self._scroller.add_widgets([
       self._adb_toggle,
