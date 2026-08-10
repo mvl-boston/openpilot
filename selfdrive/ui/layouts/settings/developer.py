@@ -1,8 +1,11 @@
 from openpilot.common.params import Params
+from openpilot.selfdrive.ui.layouts.settings.common import (LANE_CENTER_OFFSET_LABELS, LANE_CENTER_OFFSET_VALUES,
+                                                            LANE_CENTERING_E2E_AUTHORITY_LABELS, LANE_CENTERING_E2E_AUTHORITY_VALUES,
+                                                            closest_value_index)
 from openpilot.selfdrive.ui.widgets.ssh_key import ssh_key_item
 from openpilot.selfdrive.ui.ui_state import ui_state
 from openpilot.system.ui.widgets import Widget
-from openpilot.system.ui.widgets.list_view import toggle_item
+from openpilot.system.ui.widgets.list_view import multiple_button_item, toggle_item
 from openpilot.system.ui.widgets.scroller_tici import Scroller
 from openpilot.system.ui.widgets.confirm_dialog import ConfirmDialog
 from openpilot.system.ui.lib.application import gui_app
@@ -31,6 +34,14 @@ DESCRIPTIONS = {
   ),
   'lane_centering_pause_on_signal': tr_noop(
     "Fade the lane-centering correction out when a turn signal is active so it does not fight a lane change or turn."
+  ),
+  'lane_center_offset': tr_noop(
+    "Shift the lane-centering target left or right of the lane center. " +
+    "The controller automatically reduces the offset when the detected lane is narrow."
+  ),
+  'lane_centering_e2e_authority': tr_noop(
+    "How strongly a confident end-to-end model path can override lane centering when it deliberately departs the lane center. " +
+    "100% gives the model full authority; 0% disables break-in."
   ),
 }
 
@@ -111,6 +122,24 @@ class DeveloperLayout(Widget):
       callback=self._on_lane_centering_pause_on_signal,
     )
 
+    self._lane_center_offset_setting = multiple_button_item(
+      lambda: tr("Lane Center Offset"),
+      lambda: tr(DESCRIPTIONS["lane_center_offset"]),
+      buttons=list(LANE_CENTER_OFFSET_LABELS),
+      selected_index=closest_value_index(LANE_CENTER_OFFSET_VALUES, self._params.get("LaneCenterOffset", return_default=True)),
+      button_width=170,
+      callback=self._on_lane_center_offset,
+    )
+
+    self._lane_centering_e2e_authority_setting = multiple_button_item(
+      lambda: tr("E2E Override Strength"),
+      lambda: tr(DESCRIPTIONS["lane_centering_e2e_authority"]),
+      buttons=list(LANE_CENTERING_E2E_AUTHORITY_LABELS),
+      selected_index=closest_value_index(LANE_CENTERING_E2E_AUTHORITY_VALUES, self._params.get("LaneCenteringE2EAuthority", return_default=True)),
+      button_width=170,
+      callback=self._on_lane_centering_e2e_authority,
+    )
+
     self._scroller = Scroller([
       self._adb_toggle,
       self._ssh_toggle,
@@ -122,6 +151,8 @@ class DeveloperLayout(Widget):
       self._ui_debug_toggle,
       self._lane_centering_toggle,
       self._lane_centering_pause_toggle,
+      self._lane_center_offset_setting,
+      self._lane_centering_e2e_authority_setting,
     ], line_separator=True, spacing=0)
 
     # Toggles should be not available to change in onroad state
@@ -175,6 +206,11 @@ class DeveloperLayout(Widget):
 
     # this param defaults to enabled, so read it with its declared default
     self._lane_centering_pause_toggle.action_item.set_state(bool(self._params.get("LaneCenteringPauseOnSignal", return_default=True)))
+    self._lane_center_offset_setting.action_item.set_selected_button(
+      closest_value_index(LANE_CENTER_OFFSET_VALUES, self._params.get("LaneCenterOffset", return_default=True)))
+    self._lane_centering_e2e_authority_setting.action_item.set_selected_button(
+      closest_value_index(LANE_CENTERING_E2E_AUTHORITY_VALUES, self._params.get("LaneCenteringE2EAuthority", return_default=True)))
+    self._update_lane_centering_settings_enabled(self._params.get_bool("LaneCentering"))
 
   def _on_enable_ui_debug(self, state: bool):
     self._params.put_bool("ShowDebugInfo", state, block=True)
@@ -187,11 +223,23 @@ class DeveloperLayout(Widget):
   def _on_enable_ssh(self, state: bool):
     self._params.put_bool("SshEnabled", state, block=True)
 
+  def _update_lane_centering_settings_enabled(self, enabled: bool):
+    self._lane_centering_pause_toggle.action_item.set_enabled(enabled)
+    self._lane_center_offset_setting.action_item.set_enabled(enabled)
+    self._lane_centering_e2e_authority_setting.action_item.set_enabled(enabled)
+
   def _on_lane_centering(self, state: bool):
     self._params.put_bool("LaneCentering", state, block=True)
+    self._update_lane_centering_settings_enabled(state)
 
   def _on_lane_centering_pause_on_signal(self, state: bool):
     self._params.put_bool("LaneCenteringPauseOnSignal", state, block=True)
+
+  def _on_lane_center_offset(self, index: int):
+    self._params.put("LaneCenterOffset", LANE_CENTER_OFFSET_VALUES[index], block=True)
+
+  def _on_lane_centering_e2e_authority(self, index: int):
+    self._params.put("LaneCenteringE2EAuthority", LANE_CENTERING_E2E_AUTHORITY_VALUES[index], block=True)
 
   def _on_joystick_debug_mode(self, state: bool):
     self._params.put_bool("JoystickDebugMode", state, block=True)
