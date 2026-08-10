@@ -122,22 +122,21 @@ class DeveloperLayout(Widget):
       callback=self._on_lane_centering_pause_on_signal,
     )
 
-    # button_width sized so the five presets fit beside the longest title ("SLC E2E Override Strength")
     self._lane_center_offset_setting = multiple_button_item(
       lambda: tr("SLC Center Offset"),
       lambda: tr(DESCRIPTIONS["lane_center_offset"]),
       buttons=list(LANE_CENTER_OFFSET_LABELS),
       selected_index=closest_value_index(LANE_CENTER_OFFSET_VALUES, self._params.get("LaneCenterOffset", return_default=True)),
-      button_width=155,
+      button_width=170,
       callback=self._on_lane_center_offset,
     )
 
     self._lane_centering_e2e_authority_setting = multiple_button_item(
-      lambda: tr("SLC E2E Override Strength"),
+      lambda: tr("SLC E2E Override"),
       lambda: tr(DESCRIPTIONS["lane_centering_e2e_authority"]),
       buttons=list(LANE_CENTERING_E2E_AUTHORITY_LABELS),
       selected_index=closest_value_index(LANE_CENTERING_E2E_AUTHORITY_VALUES, self._params.get("LaneCenteringE2EAuthority", return_default=True)),
-      button_width=155,
+      button_width=170,
       callback=self._on_lane_centering_e2e_authority,
     )
 
