@@ -29,7 +29,7 @@ DESCRIPTIONS = {
     "Changing this setting will restart openpilot if the car is powered on."
   ),
   'lane_centering': tr_noop(
-    "StarPilot Lane Centering (SLC): experimentally bias the model command toward the detected lane center. " +
+    "StarPilot Lane Centering (SPLC): experimentally bias the model command toward the detected lane center. " +
     "Requires two confident lane lines and remains subject to normal curvature and jerk limits. Ported from StarPilot."
   ),
   'lane_centering_pause_on_signal': tr_noop(
@@ -109,21 +109,21 @@ class DeveloperLayout(Widget):
     self._on_enable_ui_debug(self._params.get_bool("ShowDebugInfo"))
 
     self._lane_centering_toggle = toggle_item(
-      lambda: tr("SLC (StarPilot Lane Centering)"),
+      lambda: tr("SPLC (StarPilot Lane Centering)"),
       description=lambda: tr(DESCRIPTIONS["lane_centering"]),
       initial_state=self._params.get_bool("LaneCentering"),
       callback=self._on_lane_centering,
     )
 
     self._lane_centering_pause_toggle = toggle_item(
-      lambda: tr("SLC Pause on Turn Signal"),
+      lambda: tr("SPLC Pause on Turn Signal"),
       description=lambda: tr(DESCRIPTIONS["lane_centering_pause_on_signal"]),
       initial_state=bool(self._params.get("LaneCenteringPauseOnSignal", return_default=True)),
       callback=self._on_lane_centering_pause_on_signal,
     )
 
     self._lane_center_offset_setting = multiple_button_item(
-      lambda: tr("SLC Center Offset"),
+      lambda: tr("SPLC Center Offset"),
       lambda: tr(DESCRIPTIONS["lane_center_offset"]),
       buttons=list(LANE_CENTER_OFFSET_LABELS),
       selected_index=closest_value_index(LANE_CENTER_OFFSET_VALUES, self._params.get("LaneCenterOffset", return_default=True)),
@@ -132,7 +132,7 @@ class DeveloperLayout(Widget):
     )
 
     self._lane_centering_e2e_authority_setting = multiple_button_item(
-      lambda: tr("SLC E2E Override"),
+      lambda: tr("SPLC E2E Override"),
       lambda: tr(DESCRIPTIONS["lane_centering_e2e_authority"]),
       buttons=list(LANE_CENTERING_E2E_AUTHORITY_LABELS),
       selected_index=closest_value_index(LANE_CENTERING_E2E_AUTHORITY_VALUES, self._params.get("LaneCenteringE2EAuthority", return_default=True)),
