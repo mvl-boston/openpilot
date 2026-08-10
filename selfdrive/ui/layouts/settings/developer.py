@@ -25,6 +25,13 @@ DESCRIPTIONS = {
     "Enable this to switch to openpilot longitudinal control. Enabling Experimental mode is recommended when enabling openpilot longitudinal control alpha. " +
     "Changing this setting will restart openpilot if the car is powered on."
   ),
+  'lane_centering': tr_noop(
+    "Experimentally bias the model command toward the detected lane center. Requires two confident lane lines " +
+    "and remains subject to normal curvature and jerk limits."
+  ),
+  'lane_centering_pause_on_signal': tr_noop(
+    "Fade the lane-centering correction out when a turn signal is active so it does not fight a lane change or turn."
+  ),
 }
 
 
@@ -90,6 +97,20 @@ class DeveloperLayout(Widget):
     )
     self._on_enable_ui_debug(self._params.get_bool("ShowDebugInfo"))
 
+    self._lane_centering_toggle = toggle_item(
+      lambda: tr("Lane Centering"),
+      description=lambda: tr(DESCRIPTIONS["lane_centering"]),
+      initial_state=self._params.get_bool("LaneCentering"),
+      callback=self._on_lane_centering,
+    )
+
+    self._lane_centering_pause_toggle = toggle_item(
+      lambda: tr("Pause Lane Centering on Turn Signal"),
+      description=lambda: tr(DESCRIPTIONS["lane_centering_pause_on_signal"]),
+      initial_state=bool(self._params.get("LaneCenteringPauseOnSignal", return_default=True)),
+      callback=self._on_lane_centering_pause_on_signal,
+    )
+
     self._scroller = Scroller([
       self._adb_toggle,
       self._ssh_toggle,
@@ -99,6 +120,8 @@ class DeveloperLayout(Widget):
       self._lat_maneuver_toggle,
       self._alpha_long_toggle,
       self._ui_debug_toggle,
+      self._lane_centering_toggle,
+      self._lane_centering_pause_toggle,
     ], line_separator=True, spacing=0)
 
     # Toggles should be not available to change in onroad state
@@ -146,8 +169,12 @@ class DeveloperLayout(Widget):
       ("LateralManeuverMode", self._lat_maneuver_toggle),
       ("AlphaLongitudinalEnabled", self._alpha_long_toggle),
       ("ShowDebugInfo", self._ui_debug_toggle),
+      ("LaneCentering", self._lane_centering_toggle),
     ):
       item.action_item.set_state(self._params.get_bool(key))
+
+    # this param defaults to enabled, so read it with its declared default
+    self._lane_centering_pause_toggle.action_item.set_state(bool(self._params.get("LaneCenteringPauseOnSignal", return_default=True)))
 
   def _on_enable_ui_debug(self, state: bool):
     self._params.put_bool("ShowDebugInfo", state, block=True)
@@ -159,6 +186,12 @@ class DeveloperLayout(Widget):
 
   def _on_enable_ssh(self, state: bool):
     self._params.put_bool("SshEnabled", state, block=True)
+
+  def _on_lane_centering(self, state: bool):
+    self._params.put_bool("LaneCentering", state, block=True)
+
+  def _on_lane_centering_pause_on_signal(self, state: bool):
+    self._params.put_bool("LaneCenteringPauseOnSignal", state, block=True)
 
   def _on_joystick_debug_mode(self, state: bool):
     self._params.put_bool("JoystickDebugMode", state, block=True)
