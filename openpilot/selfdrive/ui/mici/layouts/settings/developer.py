@@ -87,16 +87,16 @@ class DeveloperLayoutMici(NavScroller):
     self._debug_mode_toggle = BigParamControl("ui debug mode", "ShowDebugInfo",
                                               toggle_callback=lambda checked: (gui_app.set_show_touches(checked),
                                                                                gui_app.set_show_fps(checked)))
-    self._lane_centering_toggle = BigParamControl("SLC (StarPilot Lane Centering)", "LaneCentering",
+    self._lane_centering_toggle = BigParamControl("SPLC (StarPilot Lane Centering)", "LaneCentering",
                                                   toggle_callback=self._update_lane_centering_settings_enabled)
-    self._lane_centering_pause_toggle = BigToggle("SLC pause on signal",
+    self._lane_centering_pause_toggle = BigToggle("SPLC pause on signal",
                                                   initial_state=bool(ui_state.params.get("LaneCenteringPauseOnSignal", return_default=True)),
                                                   toggle_callback=self._on_lane_centering_pause_on_signal)
     # explicit font sizes: at the defaults these labels wrap enough to hide the selected-value line
-    self._lane_center_offset_toggle = BigMultiToggle("SLC center offset", list(LANE_CENTER_OFFSET_LABELS),
-                                                     select_callback=self._on_lane_center_offset, font_size=42)
-    self._lane_centering_e2e_authority_toggle = BigMultiToggle("SLC e2e override", list(LANE_CENTERING_E2E_AUTHORITY_LABELS),
-                                                               select_callback=self._on_lane_centering_e2e_authority, font_size=42)
+    self._lane_center_offset_toggle = BigMultiToggle("SPLC center offset", list(LANE_CENTER_OFFSET_LABELS),
+                                                     select_callback=self._on_lane_center_offset, font_size=40)
+    self._lane_centering_e2e_authority_toggle = BigMultiToggle("SPLC e2e override", list(LANE_CENTERING_E2E_AUTHORITY_LABELS),
+                                                               select_callback=self._on_lane_centering_e2e_authority, font_size=40)
 
     self._scroller.add_widgets([
       self._adb_toggle,
