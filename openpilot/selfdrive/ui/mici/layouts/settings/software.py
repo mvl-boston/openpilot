@@ -233,7 +233,7 @@ class BranchSelectPage(NavScroller):
 
 class TargetBranchButton(BigButton):
   def __init__(self):
-    super().__init__("target branch", ui_state.params.get("UpdaterTargetBranch") or "")
+    super().__init__("select branch", ui_state.params.get("UpdaterTargetBranch") or "")
     self.set_click_callback(self._on_click)
     self.set_visible(not ui_state.params.get_bool("IsTestedBranch"))
     self.set_enabled(lambda: ui_state.is_offroad())
@@ -271,7 +271,7 @@ class SoftwareLayoutMici(NavScroller):
       gui_app.push_widget(dlg)
       return
 
-    switch_branch_btn = BigButton("switch branch", "", gui_app.texture("icons_mici/settings/device/update.png", 64, 64))
+    switch_branch_btn = BigButton("type branch", "", gui_app.texture("icons_mici/settings/device/update.png", 64, 64))
     switch_branch_btn.set_click_callback(switch_branch_clicked)
 
     def uninstall_openpilot_callback():
