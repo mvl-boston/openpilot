@@ -165,7 +165,8 @@ class PairBigButton(BigButton):
 
 
 UPDATER_TIMEOUT = 10.0  # seconds to wait for updater to respond
-DOWNLOAD_READY_GREEN = rl.Color(46, 204, 113, 255)
+# same green as the keyboard enter pill (icons_mici/settings/keyboard/enter.png)
+DOWNLOAD_READY_GREEN = rl.Color(16, 104, 38, 207)
 
 
 class UpdateOpenpilotBigButton(BigButton):
@@ -220,7 +221,6 @@ class UpdateOpenpilotBigButton(BigButton):
     if ready == self._download_ready:
       return
     self._download_ready = ready
-    self.set_icon_color(DOWNLOAD_READY_GREEN if ready else None)
     self._sub_label.set_text_color(LABEL_COLOR if ready else COMPLICATION_GREY)
 
   def _handle_background(self) -> tuple[rl.Texture, float, float, float]:
@@ -229,6 +229,14 @@ class UpdateOpenpilotBigButton(BigButton):
     if self._download_ready and self.enabled and not self.is_pressed:
       txt_bg = self._txt_pressed_bg
     return txt_bg, btn_x, btn_y, scale
+
+  def _draw_content(self, btn_y: float):
+    if self._download_ready and self._txt_icon:
+      # white icon on a green disc, echoing the keyboard enter arrow that led here
+      x = self._rect.x + self._rect.width - 30 - self._txt_icon.width / 2
+      y = btn_y + 30 + self._txt_icon.height / 2
+      rl.draw_circle(int(x), int(y), 50, DOWNLOAD_READY_GREEN)
+    super()._draw_content(btn_y)
 
   def _update_state(self):
     super()._update_state()
