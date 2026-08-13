@@ -12,6 +12,12 @@ function agnos_init {
   # set success flag for current boot slot
   sudo abctl --set_success
 
+  # The AGNOS power drop monitor halts the SOM when the input voltage sags
+  # below 4V, which weak USB power sources (wall chargers, computer ports)
+  # commonly do under boot load. Stop it here to cover the high power draw
+  # startup phase; hardwared starts it back up once a car harness is detected.
+  sudo systemctl stop power_drop_monitor 2> /dev/null || true
+
   # TODO: do this without udev in AGNOS
   # udev does this, but sometimes we startup faster
   sudo chgrp gpu /dev/adsprpc-smd /dev/ion /dev/kgsl-3d0
