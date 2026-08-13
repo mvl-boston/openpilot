@@ -8,7 +8,7 @@ from openpilot.common.basedir import BASEDIR
 from openpilot.common.params import Params
 from openpilot.common.time_helpers import system_time_valid
 from openpilot.system.ui.widgets.scroller import NavRawScrollPanel, NavScroller
-from openpilot.selfdrive.ui.mici.widgets.button import BigButton, BigCircleButton
+from openpilot.selfdrive.ui.mici.widgets.button import BigButton, BigCircleButton, COMPLICATION_GREY, LABEL_COLOR
 from openpilot.selfdrive.ui.mici.widgets.dialog import BigDialog, BigConfirmationDialog, BigInputDialog
 from openpilot.selfdrive.ui.mici.widgets.pairing_dialog import PairingDialog
 from openpilot.selfdrive.ui.mici.onroad.driver_camera_dialog import DriverCameraDialog
@@ -165,6 +165,7 @@ class PairBigButton(BigButton):
 
 
 UPDATER_TIMEOUT = 10.0  # seconds to wait for updater to respond
+DOWNLOAD_READY_GREEN = rl.Color(46, 204, 113, 255)
 
 
 class UpdateOpenpilotBigButton(BigButton):
@@ -177,6 +178,7 @@ class UpdateOpenpilotBigButton(BigButton):
     self._waiting_for_updater_t: float | None = None
     self._hide_value_t: float | None = None
     self._state: UpdaterState = UpdaterState.IDLE
+    self._download_ready = False
 
     ui_state.add_offroad_transition_callback(self.offroad_transition)
 
@@ -213,11 +215,27 @@ class UpdateOpenpilotBigButton(BigButton):
     else:
       self.set_text("update openpilot")
 
+  def _set_download_ready(self, ready: bool):
+    # Make the "download update" state stand out so users know it's the next step
+    if ready == self._download_ready:
+      return
+    self._download_ready = ready
+    self.set_icon_color(DOWNLOAD_READY_GREEN if ready else None)
+    self._sub_label.set_text_color(LABEL_COLOR if ready else COMPLICATION_GREY)
+
+  def _handle_background(self) -> tuple[rl.Texture, float, float, float]:
+    txt_bg, btn_x, btn_y, scale = super()._handle_background()
+    # brighten the button while a download is ready
+    if self._download_ready and self.enabled and not self.is_pressed:
+      txt_bg = self._txt_pressed_bg
+    return txt_bg, btn_x, btn_y, scale
+
   def _update_state(self):
     super()._update_state()
 
     if ui_state.started:
       self.set_enabled(False)
+      self._set_download_ready(False)
       return
 
     updater_state = ui_state.params.get("UpdaterState") or ""
@@ -280,6 +298,8 @@ class UpdateOpenpilotBigButton(BigButton):
       else:
         if self.get_value() != "":
           self.set_value("")
+
+    self._set_download_ready(self._state == UpdaterState.IDLE and self.get_value() == "download update" and self.enabled)
 
     if self._state != UpdaterState.WAITING_FOR_UPDATER:
       self._waiting_for_updater_t = None

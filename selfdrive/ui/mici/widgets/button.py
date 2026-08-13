@@ -18,6 +18,7 @@ SCROLLING_SPEED_PX_S = 50
 COMPLICATION_SIZE    = 36
 LABEL_COLOR          = rl.Color(255, 255, 255, int(255 * 0.9))
 COMPLICATION_GREY    = rl.Color(0xAA, 0xAA, 0xAA, 255)
+ICON_COLOR           = rl.Color(255, 255, 255, int(255 * 0.9))
 PRESSED_SCALE = 1.15 if DO_ZOOM else 1.07
 
 
@@ -113,6 +114,7 @@ class BigButton(Widget):
     self.text = text
     self.value = value
     self._txt_icon = icon
+    self._icon_color = ICON_COLOR
     self._scroll = scroll
 
     self._scale_filter = BounceFilter(1.0, 0.1, 1 / gui_app.target_fps)
@@ -133,6 +135,9 @@ class BigButton(Widget):
 
   def set_icon(self, icon: Union[rl.Texture, None]):
     self._txt_icon = icon
+
+  def set_icon_color(self, color: Union[rl.Color, None]):
+    self._icon_color = color if color is not None else ICON_COLOR
 
   def set_rotate_icon(self, rotate: bool):
     if rotate and self._rotate_icon_t is not None:
@@ -248,7 +253,7 @@ class BigButton(Widget):
       source_rec = rl.Rectangle(0, 0, self._txt_icon.width, self._txt_icon.height)
       dest_rec = rl.Rectangle(x, y, self._txt_icon.width, self._txt_icon.height)
       origin = rl.Vector2(self._txt_icon.width / 2, self._txt_icon.height / 2)
-      rl.draw_texture_pro(self._txt_icon, source_rec, dest_rec, origin, rotation, rl.Color(255, 255, 255, int(255 * 0.9)))
+      rl.draw_texture_pro(self._txt_icon, source_rec, dest_rec, origin, rotation, self._icon_color)
 
   def _render(self, _):
     txt_bg, btn_x, btn_y, scale = self._handle_background()
