@@ -125,13 +125,31 @@ class Setup(Widget):
 
     self._downloading_body_label = Label("Downloading...", TITLE_FONT_SIZE, FontWeight.MEDIUM, text_padding=20)
 
+    if self._low_voltage() and self._car_detected():
+      self.state = SetupState.LOW_VOLTAGE
+
+  @staticmethod
+  def _low_voltage() -> bool:
     try:
       with open("/sys/class/hwmon/hwmon1/in1_input") as f:
-        voltage = float(f.read().strip()) / 1000.0
-        if voltage < 7:
-          self.state = SetupState.LOW_VOLTAGE
+        return (float(f.read().strip()) / 1000.0) < 7
     except (FileNotFoundError, ValueError):
-      self.state = SetupState.LOW_VOLTAGE
+      return True
+
+  @staticmethod
+  def _car_detected() -> bool:
+    # Low voltage is only a problem when wired into a car, where it indicates a bad
+    # harness connection or a blown fuse. When powered from a wall charger or a
+    # computer (e.g. running setup at home), low voltage is expected and harmless,
+    # so don't warn. The harness is detected through the SBU lines, which works
+    # even if the car isn't supplying 12V.
+    try:
+      from panda import Panda
+      with Panda(cli=False, disable_checks=False) as p:
+        return p.health()['car_harness_status'] != Panda.HARNESS_STATUS_NC
+    except Exception:
+      # can't talk to the panda, so there's no evidence we're in a car
+      return False
 
   def _render(self, rect: rl.Rectangle):
     if self.state == SetupState.LOW_VOLTAGE:
