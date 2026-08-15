@@ -16,7 +16,7 @@
 [submodule "sunnypilot/neural_network_data"]
   path = sunnypilot/neural_network_data
   url = https://github.com/sunnypilot/neural-network-data.git
-[submodule "opendbc"]
+[submodule "opendbc_repo"]
 	path = opendbc_repo
 	url = https://github.com/mvl-boston/opendbc
 	branch = sp-honda-202607
