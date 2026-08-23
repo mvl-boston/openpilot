@@ -18,5 +18,5 @@
   url = https://github.com/sunnypilot/neural-network-data.git
 [submodule "opendbc"]
 	path = opendbc_repo
-	url = https://github.com/mvl-boston/opendbc
-	branch = sp-honda-dev-202608
+	url = git@github.com:JamesL787/opendbc.git
+	branch = sp-honda-dev-202608-bosch-a
