@@ -349,13 +349,17 @@ void Localizer::handle_gps(double current_time, const cereal::GpsLocationData::R
   }
   VectorXd initial_pose_ecef_quat = quat2vector(euler2quat(ecef_euler_from_ned({ ecef_pos(0), ecef_pos(1), ecef_pos(2) }, orientation_ned_gps)));
 
-  if (ecef_vel.norm() > 5.0 && orientation_error.norm() > 1.0) {
+  bool first_gps = this->last_gps_msg == 0;
+  bool position_reset = first_gps || (gps_est_error > GPS_POS_ERROR_RESET_THRESHOLD && ecef_pos_std < GPS_POS_STD_RESET_THRESHOLD);
+  if (position_reset) {
+    if (!first_gps) {
+      LOGE("Locationd vs ubloxLocation position difference too large, kalman reset");
+    }
+    this->reset_kalman(NAN, initial_pose_ecef_quat, ecef_pos, ecef_vel, ecef_pos_R, ecef_vel_R);
+  } else if (ecef_vel.norm() > 5.0 && orientation_error.norm() > 1.0) {
     LOGE("Locationd vs ubloxLocation orientation difference too large, kalman reset");
     this->reset_kalman(NAN, initial_pose_ecef_quat, ecef_pos, ecef_vel, ecef_pos_R, ecef_vel_R);
     this->kf->predict_and_observe(sensor_time, OBSERVATION_ECEF_ORIENTATION_FROM_GPS, { initial_pose_ecef_quat });
-  } else if (gps_est_error > 100.0) {
-    LOGE("Locationd vs ubloxLocation position difference too large, kalman reset");
-    this->reset_kalman(NAN, initial_pose_ecef_quat, ecef_pos, ecef_vel, ecef_pos_R, ecef_vel_R);
   }
 
   this->last_gps_msg = sensor_time;
@@ -423,9 +427,12 @@ void Localizer::handle_gnss(double current_time, const cereal::GnssMeasurements:
     this->orientation_reset_count = 0;
   }
 
-  if ((gps_est_error > GPS_POS_ERROR_RESET_THRESHOLD && ecef_pos_std < GPS_POS_STD_RESET_THRESHOLD) || this->last_gps_msg == 0) {
+  bool first_gps = this->last_gps_msg == 0;
+  if ((gps_est_error > GPS_POS_ERROR_RESET_THRESHOLD && ecef_pos_std < GPS_POS_STD_RESET_THRESHOLD) || first_gps) {
     // always reset on first gps message and if the location is off but the accuracy is high
-    LOGE("Locationd vs gnssMeasurement position difference too large, kalman reset");
+    if (!first_gps) {
+      LOGE("Locationd vs gnssMeasurement position difference too large, kalman reset");
+    }
     this->reset_kalman(NAN, initial_pose_ecef_quat, ecef_pos, ecef_vel, ecef_pos_R, ecef_vel_R);
   } else if (orientation_reset_count > GPS_ORIENTATION_ERROR_RESET_CNT) {
     LOGE("Locationd vs gnssMeasurement orientation difference too large, kalman reset");
@@ -520,7 +527,7 @@ void Localizer::reset_kalman(double current_time) {
 }
 
 void Localizer::finite_check(double current_time) {
-  bool all_finite = this->kf->get_x().array().isFinite().all() or this->kf->get_P().array().isFinite().all();
+  bool all_finite = this->kf->get_x().array().isFinite().all() and this->kf->get_P().array().isFinite().all();
   if (!all_finite) {
     LOGE("Non-finite values detected, kalman reset");
     this->reset_kalman(current_time);
