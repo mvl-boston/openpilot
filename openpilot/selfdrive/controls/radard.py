@@ -7,15 +7,17 @@ from typing import Any
 import capnp
 from openpilot.cereal import messaging, log, custom
 from opendbc.car.structs import car
+
+from opendbc.car import structs
+from opendbc.car.hyundai.values import HyundaiFlags
+from opendbc.sunnypilot.car.hyundai.values import HyundaiFlagsSP
 from openpilot.common.filter_simple import FirstOrderFilter
 from openpilot.common.params import Params
 from openpilot.common.realtime import DT_MDL, Priority, config_realtime_process
 from openpilot.common.swaglog import cloudlog
 from openpilot.common.simple_kalman import KF1D
-
-from opendbc.car import structs
-from opendbc.car.hyundai.values import HyundaiFlags
-from opendbc.sunnypilot.car.hyundai.values import HyundaiFlagsSP
+from opendbc.car.honda.radar_interface import BOSCH_A_FREQ_HZ
+from opendbc.car.honda.values import HONDA_BOSCH_A
 
 
 # Default lead acceleration decay set to 50% at 1s
@@ -28,6 +30,15 @@ SPEED, ACCEL = 0, 1     # Kalman filter states enum
 V_EGO_STATIONARY = 4.   # no stationary object flag below this speed
 
 RADAR_TO_CAMERA = 1.52  # RADAR is ~ 1.5m ahead from center of mesh frame
+HONDA_BOSCH_A_RADAR_TS = 1.0 / BOSCH_A_FREQ_HZ
+HONDA_BOSCH_A_LOW_SPEED_MIN_COUNT = 3
+HONDA_BOSCH_A_CHALLENGER_STALE_CYCLES = 2
+HONDA_BOSCH_A_GROSS_DISTANCE_STALE_CYCLES = 3
+HONDA_BOSCH_A_GROSS_DISTANCE_M = 25.0
+
+
+def is_bosch_a_radar_car(CP) -> bool:
+  return CP.brand == "honda" and CP.carFingerprint in HONDA_BOSCH_A and not CP.radarUnavailable
 
 
 class KalmanParams:
@@ -62,27 +73,38 @@ class Track:
     self.K_K = kalman_params.K
     self.kf = KF1D([[v_lead], [0.0]], self.K_A, self.K_C, self.K_K)
 
-  def update(self, d_rel: float, y_rel: float, v_rel: float, v_lead: float):
+  def update(self, d_rel: float, y_rel: float, v_rel: float, v_lead: float, measured: bool = True,
+             measurement_update: bool | None = None):
     # relative values, copy
     self.dRel = d_rel   # LONG_DIST
     self.yRel = y_rel   # -LAT_DIST
     self.vRel = v_rel   # REL_SPEED
     self.vLead = v_lead
+    self.measured = measured   # measured or estimate
+
+    # `measurement_update` is separate from the published measured bit so legacy radar sources keep
+    # their existing behaviour. Civic Bosch emits real measurements at ~15 Hz while radard is driven
+    # at the ~20 Hz model rate; duplicate liveTracks payloads must not be absorbed twice.
+    if measurement_update is None:
+      # Preserve the historical Track.update behaviour for direct/legacy callers. The radar source
+      # adapter supplies an explicit False only for a duplicate Civic Bosch payload.
+      measurement_update = True
 
     # computed velocity and accelerations
-    if self.cnt > 0:
+    if measurement_update and self.cnt > 0:
       self.kf.update(self.vLead)
 
     self.vLeadK = float(self.kf.x[SPEED][0])
     self.aLeadK = float(self.kf.x[ACCEL][0])
 
-    # Learn if constant acceleration
-    if abs(self.aLeadK) < 0.5:
-      self.aLeadTau.x = _LEAD_ACCEL_TAU
-    else:
-      self.aLeadTau.update(0.0)
+    if measurement_update:
+      # Learn if constant acceleration
+      if abs(self.aLeadK) < 0.5:
+        self.aLeadTau.x = _LEAD_ACCEL_TAU
+      else:
+        self.aLeadTau.update(0.0)
 
-    self.cnt += 1
+      self.cnt += 1
 
   def get_RadarState(self, model_prob: float = 0.0):
     return {
@@ -112,6 +134,29 @@ class Track:
 def laplacian_pdf(x: float, mu: float, b: float):
   b = max(b, 1e-4)
   return math.exp(-abs(x-mu)/b)
+
+
+def vision_track_probability(track: Track, lead: capnp._DynamicStructReader, v_ego: float) -> float:
+  offset_vision_dist = lead.x[0] - RADAR_TO_CAMERA
+  prob_d = laplacian_pdf(track.dRel, offset_vision_dist, lead.xStd[0])
+  prob_y = laplacian_pdf(track.yRel, -lead.y[0], lead.yStd[0])
+  prob_v = laplacian_pdf(track.vRel + v_ego, lead.v[0], lead.vStd[0])
+  return prob_d * prob_y * prob_v
+
+
+def honda_bosch_a_low_speed_radar_lead_sane(track: Track, v_ego: float) -> bool:
+  """Require a few real Bosch sweeps before a radar-only low-speed takeover."""
+  return track.cnt >= HONDA_BOSCH_A_LOW_SPEED_MIN_COUNT and track.potential_low_speed_lead(v_ego)
+
+
+def track_matches_vision(track: Track, lead: capnp._DynamicStructReader, v_ego: float, *,
+                         dist_scale: float, dist_floor: float, vel_limit: float,
+                         y_std_scale: float, y_floor: float) -> bool:
+  offset_vision_dist = lead.x[0] - RADAR_TO_CAMERA
+  dist_sane = abs(track.dRel - offset_vision_dist) < max(abs(offset_vision_dist) * dist_scale, dist_floor)
+  vel_sane = (abs(track.vRel + v_ego - lead.v[0]) < vel_limit) or (v_ego + track.vRel > 3)
+  lat_sane = abs(track.yRel + lead.y[0]) < max(y_floor, y_std_scale * max(float(lead.yStd[0]), 0.2))
+  return dist_sane and vel_sane and lat_sane
 
 
 def match_vision_to_track(v_ego: float, lead: capnp._DynamicStructReader, tracks: dict[int, Track]):
@@ -154,9 +199,19 @@ def get_RadarState_from_vision(lead_msg: capnp._DynamicStructReader, v_ego: floa
   }
 
 
+def get_custom_yrel(CP: structs.CarParams, CP_SP: structs.CarParamsSP, lead_dict: dict[str, Any],
+                    lead_msg: capnp._DynamicStructReader) -> dict[str, Any]:
+  if CP.brand == "hyundai" and (CP_SP.flags & HyundaiFlagsSP.ENHANCED_SCC or
+                                CP.flags & (HyundaiFlags.CANFD_CAMERA_SCC | HyundaiFlags.CAMERA_SCC)):
+    lead_dict['yRel'] = float(-lead_msg.y[0])
+
+  return lead_dict
+
+
 def get_lead(v_ego: float, ready: bool, tracks: dict[int, Track], lead_msg: capnp._DynamicStructReader,
              model_v_ego: float, lead_prob: float, CP: structs.CarParams, CP_SP: structs.CarParamsSP,
-             low_speed_override: bool = True) -> dict[str, Any]:
+             low_speed_override: bool = True, preferred_track_id: int = -1,
+             honda_bosch_a_radar: bool = False) -> dict[str, Any]:
   # Determine leads, this is where the essential logic happens
   if len(tracks) > 0 and ready and lead_prob > .5:
     track = match_vision_to_track(v_ego, lead_msg, tracks)
@@ -166,12 +221,54 @@ def get_lead(v_ego: float, ready: bool, tracks: dict[int, Track], lead_msg: capn
   lead_dict = {'present': False}
   if track is not None:
     lead_dict = track.get_RadarState(lead_prob)
-    lead_dict = get_custom_yrel(CP, CP_SP, lead_dict, lead_msg)
   elif (track is None) and ready and (lead_prob > .5):
     lead_dict = get_RadarState_from_vision(lead_msg, v_ego, model_v_ego, lead_prob)
 
+  lead_dict = get_custom_yrel(CP, CP_SP, lead_dict, lead_msg)
+
   if low_speed_override:
-    low_speed_tracks = [c for c in tracks.values() if c.potential_low_speed_lead(v_ego)]
+    if honda_bosch_a_radar:
+      low_speed_tracks = [c for c in tracks.values() if honda_bosch_a_low_speed_radar_lead_sane(c, v_ego)]
+    else:
+      low_speed_tracks = [c for c in tracks.values() if c.potential_low_speed_lead(v_ego)]
+
+    model_lead_available = ready and lead_prob > .5
+
+    # Keep a previously selected Bosch radar track through ordinary model-probability fluctuations
+    # when it is still coherent. If the model has a valid lead, the old track must still agree with
+    # that lead; no model lead leaves the mature radar track eligible for continuity.
+    if honda_bosch_a_radar:
+      preferred_track = tracks.get(preferred_track_id)
+      if (preferred_track is not None and honda_bosch_a_low_speed_radar_lead_sane(preferred_track, v_ego)):
+        preferred_matches_model = (not model_lead_available or
+                                   track_matches_vision(preferred_track, lead_msg, v_ego,
+                                                        dist_scale=0.25, dist_floor=5.0,
+                                                        vel_limit=10.0, y_std_scale=1.0, y_floor=1.0))
+        preferred_is_current = (not lead_dict.get('present', False) or
+                                lead_dict.get('radarTrackId', -1) == preferred_track_id or
+                                (lead_dict.get('present', False) and not lead_dict.get('radar', False)))
+        if preferred_is_current and preferred_matches_model:
+          lead_dict = preferred_track.get_RadarState(lead_prob)
+
+    def candidate_is_established(candidate: Track) -> bool:
+      if not honda_bosch_a_radar:
+        return True
+      if candidate.cnt < HONDA_BOSCH_A_LOW_SPEED_MIN_COUNT:
+        return False
+      if not lead_dict.get('present', False):
+        # A mature centered Bosch point may provide the radar-only low-speed lead.
+        return True
+      if lead_dict.get('radarTrackId', -1) == candidate.identifier:
+        return True
+      # Do not replace an established lead with an unrelated closer point when there is no model
+      # evidence to arbitrate them. A different candidate may take over only after it agrees with
+      # the available model lead; radar-only takeover remains possible when lead_dict is invalid.
+      return (model_lead_available and
+              track_matches_vision(candidate, lead_msg, v_ego,
+                                   dist_scale=0.25, dist_floor=5.0,
+                                   vel_limit=10.0, y_std_scale=1.0, y_floor=1.0))
+
+    low_speed_tracks = [c for c in low_speed_tracks if candidate_is_established(c)]
     if len(low_speed_tracks) > 0:
       closest_track = min(low_speed_tracks, key=lambda c: c.dRel)
 
@@ -182,33 +279,90 @@ def get_lead(v_ego: float, ready: bool, tracks: dict[int, Track], lead_msg: capn
   return lead_dict
 
 
-def get_custom_yrel(CP: structs.CarParams, CP_SP: structs.CarParamsSP, lead_dict: dict[str, Any],
-                    lead_msg: capnp._DynamicStructReader) -> dict[str, Any]:
-  if CP.brand == "hyundai" and (CP_SP.flags & HyundaiFlagsSP.ENHANCED_SCC or
-                                CP.flags & (HyundaiFlags.CANFD_CAMERA_SCC | HyundaiFlags.CAMERA_SCC)):
-    lead_dict['yRel'] = float(-lead_msg.y[0])
-
-  return lead_dict
-
-
 class RadarD:
-  def __init__(self, CP: structs.CarParams, CP_SP: structs.CarParams, delay: float = 0.0):
+  def __init__(self, CP: structs.CarParams, CP_SP: structs.CarParams, delay: float = 0.0,
+               honda_bosch_a_radar: bool = False):
     self.CP = CP
     self.CP_SP = CP_SP
 
     self.current_time = 0.0
+    self.honda_bosch_a_radar = honda_bosch_a_radar
     self.tracks: dict[int, Track] = {}
-    self.kalman_params = KalmanParams(DT_MDL)
+    # The lead KF consumes Bosch measurements at the physical radar cadence. Lead probability
+    # filters, however, consume modelV2 leads every model cycle and must retain model-loop timing.
+    kf_dt = HONDA_BOSCH_A_RADAR_TS if self.honda_bosch_a_radar else DT_MDL
+    self.kalman_params = KalmanParams(kf_dt)
     self.lead_prob_filters = [FirstOrderFilter(0.0, 0.2, DT_MDL) for _ in range(2)]
+    self.prev_lead_track_ids = [-1, -1]
+    self.preferred_stale_track_ids = [-1, -1]
+    self.preferred_challenger_stale_counts = [0, 0]
+    self.preferred_gross_distance_stale_counts = [0, 0]
 
     self.v_ego = 0.0
     self.v_ego_hist = deque([0.0], maxlen=int(round(delay / DT_MDL))+1)
     self.last_v_ego_frame = -1
+    self._last_tracks_frame = -1
 
     self.radar_state: capnp._DynamicStructBuilder | None = None
     self.radar_state_valid = False
 
     self.ready = False
+
+  def _reset_preferred_stale_evidence(self, lead_index: int, track_id: int = -1) -> None:
+    self.preferred_stale_track_ids[lead_index] = track_id
+    self.preferred_challenger_stale_counts[lead_index] = 0
+    self.preferred_gross_distance_stale_counts[lead_index] = 0
+
+  def _update_honda_bosch_a_preferred_staleness(self, lead_index: int, lead: capnp._DynamicStructReader,
+                                                 lead_prob: float) -> None:
+    if not self.honda_bosch_a_radar:
+      return
+
+    preferred_id = self.prev_lead_track_ids[lead_index]
+    if self.preferred_stale_track_ids[lead_index] != preferred_id:
+      self._reset_preferred_stale_evidence(lead_index, preferred_id)
+
+    preferred_track = self.tracks.get(preferred_id)
+    if preferred_id < 0 or preferred_track is None or not self.ready or lead_prob <= .5:
+      self._reset_preferred_stale_evidence(lead_index, preferred_id)
+      return
+
+    strict_match = track_matches_vision(preferred_track, lead, self.v_ego,
+                                        dist_scale=0.25, dist_floor=5.0,
+                                        vel_limit=10.0, y_std_scale=1.0, y_floor=1.0)
+    relaxed_match = track_matches_vision(preferred_track, lead, self.v_ego,
+                                         dist_scale=0.40, dist_floor=8.0,
+                                         vel_limit=13.0, y_std_scale=2.0, y_floor=1.5)
+
+    # Arm A: a preferred track that no longer passes continuity may be stale when another live
+    # track has a better association score. Clearing preference never selects that challenger;
+    # the unchanged strict match path below remains the only way it can become a radar lead.
+    if relaxed_match:
+      self.preferred_challenger_stale_counts[lead_index] = 0
+    else:
+      best_track = max(self.tracks.values(), key=lambda candidate: vision_track_probability(candidate, lead, self.v_ego))
+      preferred_score = vision_track_probability(preferred_track, lead, self.v_ego)
+      best_score = vision_track_probability(best_track, lead, self.v_ego)
+      if best_track.identifier != preferred_id and best_score > preferred_score:
+        self.preferred_challenger_stale_counts[lead_index] += 1
+      else:
+        self.preferred_challenger_stale_counts[lead_index] = 0
+
+    # Arm B: gross absolute range disagreement is independent evidence of staleness, but a strict
+    # match is authoritative and resets the streak even when model uncertainty permits >25 m error.
+    distance_mismatch = abs(preferred_track.dRel - (lead.x[0] - RADAR_TO_CAMERA))
+    if strict_match:
+      self.preferred_gross_distance_stale_counts[lead_index] = 0
+    elif distance_mismatch > HONDA_BOSCH_A_GROSS_DISTANCE_M:
+      self.preferred_gross_distance_stale_counts[lead_index] += 1
+    else:
+      self.preferred_gross_distance_stale_counts[lead_index] = 0
+
+    challenger_stale = self.preferred_challenger_stale_counts[lead_index] >= HONDA_BOSCH_A_CHALLENGER_STALE_CYCLES
+    distance_stale = self.preferred_gross_distance_stale_counts[lead_index] >= HONDA_BOSCH_A_GROSS_DISTANCE_STALE_CYCLES
+    if challenger_stale or distance_stale:
+      self.prev_lead_track_ids[lead_index] = -1
+      self._reset_preferred_stale_evidence(lead_index)
 
   def update(self, sm: messaging.SubMaster, rr: car.RadarData):
     self.ready = sm.seen['modelV2']
@@ -218,7 +372,12 @@ class RadarD:
       self.v_ego_hist.append(self.v_ego)
       self.last_v_ego_frame = sm.recv_frame['carState']
 
-    ar_pts = {pt.trackId: [pt.dRel, pt.yRel, pt.vRel] for pt in rr.points}
+    radar_fresh = True
+    if self.honda_bosch_a_radar:
+      radar_fresh = sm.recv_frame['radarTracks'] != self._last_tracks_frame
+      self._last_tracks_frame = sm.recv_frame['radarTracks']
+
+    ar_pts = {pt.trackId: [pt.dRel, pt.yRel, pt.vRel, pt.measured] for pt in rr.points}
 
     # *** remove missing points from meta data ***
     for ids in list(self.tracks.keys()):
@@ -235,7 +394,11 @@ class RadarD:
       # create the track if it doesn't exist or it's a new track
       if ids not in self.tracks:
         self.tracks[ids] = Track(ids, v_lead, self.kalman_params)
-      self.tracks[ids].update(rpt[0], rpt[1], rpt[2], v_lead)
+      measured = rpt[3] if not self.honda_bosch_a_radar else bool(rpt[3] and radar_fresh)
+      # Non-Bosch sources retain the historical per-model-cycle update semantics. Only Honda Bosch-A
+      # suppresses duplicate measurement updates when radarTracks has not advanced.
+      measurement_update = True if not self.honda_bosch_a_radar else measured
+      self.tracks[ids].update(rpt[0], rpt[1], rpt[2], v_lead, measured, measurement_update)
 
     # *** publish radarState ***
     self.radar_state_valid = sm.all_checks()
@@ -257,10 +420,26 @@ class RadarD:
         else:
           self.lead_prob_filters[i].update(lead_prob)
 
+        self._update_honda_bosch_a_preferred_staleness(i, leads_v3[i], self.lead_prob_filters[i].x)
+
       self.radar_state.leadOne = get_lead(self.v_ego, self.ready, self.tracks, leads_v3[0], model_v_ego, self.lead_prob_filters[0].x,
-                                          self.CP, self.CP_SP, low_speed_override=True)
+                                          self.CP, self.CP_SP, low_speed_override=True,
+                                          preferred_track_id=self.prev_lead_track_ids[0],
+                                          honda_bosch_a_radar=self.honda_bosch_a_radar)
       self.radar_state.leadTwo = get_lead(self.v_ego, self.ready, self.tracks, leads_v3[1], model_v_ego, self.lead_prob_filters[1].x,
-                                          self.CP, self.CP_SP, low_speed_override=False)
+                                          self.CP, self.CP_SP, low_speed_override=False,
+                                          preferred_track_id=self.prev_lead_track_ids[1],
+                                          honda_bosch_a_radar=self.honda_bosch_a_radar)
+
+      for i, lead in enumerate((self.radar_state.leadOne, self.radar_state.leadTwo)):
+        if lead.present and getattr(lead, "radar", False):
+          track_id = int(getattr(lead, "radarTrackId", -1))
+          if track_id != self.prev_lead_track_ids[i]:
+            self._reset_preferred_stale_evidence(i, track_id)
+          self.prev_lead_track_ids[i] = track_id
+        elif (not lead.present) or (self.prev_lead_track_ids[i] not in self.tracks):
+          self.prev_lead_track_ids[i] = -1
+          self._reset_preferred_stale_evidence(i)
 
   def publish(self, pm: messaging.PubMaster):
     assert self.radar_state is not None
@@ -288,7 +467,8 @@ def main() -> None:
   sm = messaging.SubMaster(['modelV2', 'carState', 'radarTracks'], poll='modelV2')
   pm = messaging.PubMaster(['radarState'])
 
-  RD = RadarD(CP, CP_SP, CP.radarDelay)
+  honda_bosch_a_radar = is_bosch_a_radar_car(CP)
+  RD = RadarD(CP, CP_SP, CP.radarDelay, honda_bosch_a_radar=honda_bosch_a_radar)
 
   while 1:
     sm.update()
