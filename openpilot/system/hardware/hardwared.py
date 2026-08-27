@@ -222,6 +222,7 @@ def hardware_thread(end_event, hw_queue) -> None:
   offroad_temp_filter = FirstOrderFilter(0., TEMP_TAU, DT_HW, initialized=False)
   should_start_prev = False
   in_car = False
+  in_car_prev: bool | None = None
   engaged_prev = False
   pwrsave = False
   offroad_cycle_count = 0
@@ -265,6 +266,16 @@ def hardware_thread(end_event, hw_queue) -> None:
       if onroad_conditions["ignition"]:
         onroad_conditions["ignition"] = False
         cloudlog.error("panda timed out onroad")
+
+    # AGNOS's power drop monitor does a controlled halt when the input voltage
+    # sags below 4V, so an abrupt car power cut doesn't corrupt data. On a wall
+    # charger or computer USB port those sags are normal and the halt leaves the
+    # device looking dead, so only run the monitor when wired into a car.
+    if HARDWARE.get_device_type() in ("tici", "tizi") and in_car != in_car_prev:
+      action = "start" if in_car else "stop"
+      cloudlog.warning(f"power_drop_monitor: {action} (in_car={in_car})")
+      subprocess.run(["sudo", "systemctl", action, "power_drop_monitor"], check=False)
+      in_car_prev = in_car
 
     # Run at 2Hz, plus either edge of ignition
     ign_edge = (started_ts is not None) != all(onroad_conditions.values())
