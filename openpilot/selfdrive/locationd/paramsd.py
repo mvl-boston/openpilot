@@ -2,6 +2,7 @@
 import os
 import numpy as np
 import capnp
+from pathlib import Path
 
 import openpilot.cereal.messaging as messaging
 from openpilot.cereal import log
@@ -23,14 +24,18 @@ OFFSET_MAX = 10.0
 OFFSET_LOWERED_MAX = 8.0
 MIN_ACTIVE_SPEED = 1.0
 LOW_ACTIVE_SPEED = 10.0
+FIXED_STEER_RATIO_PATH = Path("/data/params/FixedSteerRatio")
 
 
 class VehicleParamsLearner:
-  def __init__(self, CP: car.CarParams, steer_ratio: float, stiffness_factor: float, angle_offset: float, P_initial: np.ndarray | None = None):
+  def __init__(self, CP: car.CarParams, steer_ratio: float, stiffness_factor: float, angle_offset: float,
+               P_initial: np.ndarray | None = None, fixed_steer_ratio: float | None = None):
     self.kf = CarKalman(GENERATED_DIR)
 
+    self.fixed_steer_ratio = fixed_steer_ratio
+
     self.x_initial = CarKalman.initial_x.copy()
-    self.x_initial[States.STEER_RATIO] = steer_ratio
+    self.x_initial[States.STEER_RATIO] = steer_ratio if self.fixed_steer_ratio is None else self.fixed_steer_ratio
     self.x_initial[States.STIFFNESS] = stiffness_factor
     self.x_initial[States.ANGLE_OFFSET] = angle_offset
     self.P_initial = P_initial if P_initial is not None else CarKalman.P_initial
@@ -105,13 +110,24 @@ class VehicleParamsLearner:
                                       np.array([np.atleast_2d(roll_std**2)]))
         self.kf.predict_and_observe(t, ObservationKind.ANGLE_OFFSET_FAST, np.array([[0]]))
 
-        # We observe the current stiffness and steer ratio (with a high observation noise) to bound
-        # the respective estimate STD. Otherwise the STDs keep increasing, causing rapid changes in the
-        # states in longer routes (especially straight stretches).
+        # We observe the current stiffness (with a high observation noise) to bound the estimate STD.
+        # Otherwise the STD keeps increasing, causing rapid changes in the states in longer routes
+        # (especially straight stretches).
         stiffness = float(self.kf.x[States.STIFFNESS].item())
-        steer_ratio = float(self.kf.x[States.STEER_RATIO].item())
         self.kf.predict_and_observe(t, ObservationKind.STIFFNESS, np.array([[stiffness]]))
-        self.kf.predict_and_observe(t, ObservationKind.STEER_RATIO, np.array([[steer_ratio]]))
+
+        if self.fixed_steer_ratio is not None:
+          # Steer ratio is user-fixed: continually observe the fixed value with tight noise so the
+          # filter's internal steer ratio state converges to and stays at it, instead of drifting off
+          # on its own (which would then only be masked, not prevented, when publishing the output).
+          self.kf.predict_and_observe(t, ObservationKind.STEER_RATIO,
+                                      np.array([[self.fixed_steer_ratio]]),
+                                      np.array([np.atleast_2d(1e-5)]))
+        else:
+          # We observe the current steer ratio (with a high observation noise) to bound the estimate
+          # STD, for the same reason as stiffness above.
+          steer_ratio = float(self.kf.x[States.STEER_RATIO].item())
+          self.kf.predict_and_observe(t, ObservationKind.STEER_RATIO, np.array([[steer_ratio]]))
 
     elif which == 'extrinsicsCalibration':
       self.calibrator.feed_extrinsics_calibration(msg)
@@ -163,7 +179,7 @@ class VehicleParamsLearner:
     vehicleParameters = msg.vehicleParameters
     vehicleParameters.posenetValid = True
     vehicleParameters.sensorValid = sensors_valid
-    vehicleParameters.steerRatio = float(x[States.STEER_RATIO].item())
+    vehicleParameters.steerRatio = self.fixed_steer_ratio if self.fixed_steer_ratio is not None else float(x[States.STEER_RATIO].item())
     vehicleParameters.stiffnessFactor = float(x[States.STIFFNESS].item())
     vehicleParameters.roll = float(self.roll)
     vehicleParameters.angleOffsetAverageDeg = float(self.avg_angle_offset)
@@ -180,7 +196,7 @@ class VehicleParamsLearner:
       vehicleParameters.stiffnessFactorValid,
       vehicleParameters.steerRatioValid,
     ))
-    vehicleParameters.steerRatioStd = float(P[States.STEER_RATIO].item())
+    vehicleParameters.steerRatioStd = 0.0 if self.fixed_steer_ratio is not None else float(P[States.STEER_RATIO].item())
     vehicleParameters.stiffnessFactorStd = float(P[States.STIFFNESS].item())
     vehicleParameters.angleOffsetAverageStd = float(P[States.ANGLE_OFFSET].item())
     vehicleParameters.angleOffsetFastStd = float(P[States.ANGLE_OFFSET_FAST].item())
@@ -255,7 +271,21 @@ def main():
   CP = messaging.log_from_bytes(params.get("CarParams", block=True), car.CarParams)
 
   steer_ratio, stiffness_factor, angle_offset_deg, pInitial = retrieve_initial_vehicle_params(params, CP, REPLAY, DEBUG)
-  learner = VehicleParamsLearner(CP, steer_ratio, stiffness_factor, np.radians(angle_offset_deg), pInitial)
+  fixed_steer_ratio = None
+  try:
+    fixed_steer_ratio_param = FIXED_STEER_RATIO_PATH.read_text().strip()
+  except OSError:
+    fixed_steer_ratio_param = None
+
+  if fixed_steer_ratio_param is not None:
+    try:
+      requested_ratio = float(fixed_steer_ratio_param)
+      fixed_steer_ratio = float(np.clip(requested_ratio, 0.75 * CP.steerRatio, 1.25 * CP.steerRatio))
+    except (TypeError, ValueError):
+      cloudlog.warning("Ignoring invalid FixedSteerRatio parameter")
+
+  learner = VehicleParamsLearner(CP, steer_ratio, stiffness_factor, np.radians(angle_offset_deg), pInitial,
+                                 fixed_steer_ratio=fixed_steer_ratio)
 
   while True:
     sm.update()
