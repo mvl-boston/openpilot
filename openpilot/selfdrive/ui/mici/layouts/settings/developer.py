@@ -1,10 +1,12 @@
 from collections.abc import Callable
 from openpilot.common.time_helpers import system_time_valid
 from openpilot.system.ui.widgets.scroller import NavScroller
-from openpilot.selfdrive.ui.mici.widgets.button import BigButton, BigToggle, BigParamControl, BigCircleParamControl, GreyBigButton
+from openpilot.selfdrive.ui.mici.widgets.button import BigButton, BigToggle, BigMultiToggle, BigParamControl, BigCircleParamControl, GreyBigButton
 from openpilot.selfdrive.ui.mici.widgets.dialog import BigDialog, BigInputDialog, BigConfirmationCircleButton
 from openpilot.system.ui.lib.application import gui_app
-from openpilot.selfdrive.ui.layouts.settings.common import restart_needed_callback
+from openpilot.selfdrive.ui.layouts.settings.common import (LANE_CENTER_OFFSET_LABELS, LANE_CENTER_OFFSET_VALUES,
+                                                            LANE_CENTERING_E2E_AUTHORITY_LABELS, LANE_CENTERING_E2E_AUTHORITY_VALUES,
+                                                            closest_value_index, restart_needed_callback)
 from openpilot.selfdrive.ui.ui_state import ui_state
 from openpilot.selfdrive.ui.widgets.ssh_key import SshKeyFetcher
 
@@ -85,6 +87,16 @@ class DeveloperLayoutMici(NavScroller):
     self._debug_mode_toggle = BigParamControl("ui debug mode", "ShowDebugInfo",
                                               toggle_callback=lambda checked: (gui_app.set_show_touches(checked),
                                                                                gui_app.set_show_fps(checked)))
+    self._lane_centering_toggle = BigParamControl("SPLC (StarPilot Lane Centering)", "LaneCentering",
+                                                  toggle_callback=self._update_lane_centering_settings_enabled)
+    self._lane_centering_pause_toggle = BigToggle("SPLC pause on signal",
+                                                  initial_state=bool(ui_state.params.get("LaneCenteringPauseOnSignal", return_default=True)),
+                                                  toggle_callback=self._on_lane_centering_pause_on_signal)
+    # explicit font sizes: at the defaults these labels wrap enough to hide the selected-value line
+    self._lane_center_offset_toggle = BigMultiToggle("SPLC center offset", list(LANE_CENTER_OFFSET_LABELS),
+                                                     select_callback=self._on_lane_center_offset, font_size=40)
+    self._lane_centering_e2e_authority_toggle = BigMultiToggle("SPLC e2e override", list(LANE_CENTERING_E2E_AUTHORITY_LABELS),
+                                                               select_callback=self._on_lane_centering_e2e_authority, font_size=40)
 
     self._scroller.add_widgets([
       self._adb_toggle,
@@ -95,6 +107,10 @@ class DeveloperLayoutMici(NavScroller):
       self._lat_maneuver_toggle,
       self._alpha_long_toggle,
       self._debug_mode_toggle,
+      self._lane_centering_toggle,
+      self._lane_centering_pause_toggle,
+      self._lane_center_offset_toggle,
+      self._lane_centering_e2e_authority_toggle,
     ])
 
     # Toggle lists
@@ -106,6 +122,7 @@ class DeveloperLayoutMici(NavScroller):
       ("LateralManeuverMode", self._lat_maneuver_toggle),
       ("AlphaLongitudinalEnabled", self._alpha_long_toggle),
       ("ShowDebugInfo", self._debug_mode_toggle),
+      ("LaneCentering", self._lane_centering_toggle),
     )
     onroad_blocked_toggles = (self._adb_toggle, self._joystick_toggle)
     release_blocked_toggles = (self._joystick_toggle, self._long_maneuver_toggle, self._lat_maneuver_toggle, self._alpha_long_toggle)
@@ -161,6 +178,29 @@ class DeveloperLayoutMici(NavScroller):
     # Refresh toggles from params to mirror external changes
     for key, item in self._refresh_toggles:
       item.set_checked(ui_state.params.get_bool(key))
+
+    # this param defaults to enabled, so read it with its declared default
+    self._lane_centering_pause_toggle.set_checked(bool(ui_state.params.get("LaneCenteringPauseOnSignal", return_default=True)))
+    self._lane_center_offset_toggle.set_value(
+      LANE_CENTER_OFFSET_LABELS[closest_value_index(LANE_CENTER_OFFSET_VALUES, ui_state.params.get("LaneCenterOffset", return_default=True))])
+    self._lane_centering_e2e_authority_toggle.set_value(
+      LANE_CENTERING_E2E_AUTHORITY_LABELS[
+        closest_value_index(LANE_CENTERING_E2E_AUTHORITY_VALUES, ui_state.params.get("LaneCenteringE2EAuthority", return_default=True))])
+    self._update_lane_centering_settings_enabled(ui_state.params.get_bool("LaneCentering"))
+
+  def _update_lane_centering_settings_enabled(self, enabled: bool):
+    self._lane_centering_pause_toggle.set_enabled(enabled)
+    self._lane_center_offset_toggle.set_enabled(enabled)
+    self._lane_centering_e2e_authority_toggle.set_enabled(enabled)
+
+  def _on_lane_centering_pause_on_signal(self, state: bool):
+    ui_state.params.put_bool("LaneCenteringPauseOnSignal", state, block=True)
+
+  def _on_lane_center_offset(self, value: str):
+    ui_state.params.put("LaneCenterOffset", LANE_CENTER_OFFSET_VALUES[LANE_CENTER_OFFSET_LABELS.index(value)], block=True)
+
+  def _on_lane_centering_e2e_authority(self, value: str):
+    ui_state.params.put("LaneCenteringE2EAuthority", LANE_CENTERING_E2E_AUTHORITY_VALUES[LANE_CENTERING_E2E_AUTHORITY_LABELS.index(value)], block=True)
 
   def _on_joystick_debug_mode(self, state: bool):
     ui_state.params.put_bool("JoystickDebugMode", state, block=True)
