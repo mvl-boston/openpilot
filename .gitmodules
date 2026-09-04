@@ -1,6 +1,7 @@
 [submodule "panda"]
   path = panda
-  url = ../../commaai/panda.git
+  url = https://github.com/mvl-boston/panda.git
+  branch = rlx-forwarder-flash
 [submodule "msgq"]
   path = msgq_repo
   url = ../../commaai/msgq.git
@@ -16,4 +17,4 @@
 [submodule "opendbc_repo"]
 	path = opendbc_repo
 	url = https://github.com/mvl-boston/opendbc
-	branch = rlx-step21
+	branch = rlx-forwarder-flash
