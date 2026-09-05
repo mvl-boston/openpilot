@@ -59,6 +59,7 @@ inline static std::unordered_map<std::string, ParamKeyAttributes> keys = {
     {"HondaCreepFactorParams", {PERSISTENT, FLOAT}},
     {"HondaFeedForwardParams", {PERSISTENT, FLOAT}},
     {"HondaGasAlphaParams", {PERSISTENT, FLOAT}},
+    {"HondaGasFactorLowParams", {PERSISTENT, FLOAT}},
     {"HondaGasFactorParams", {PERSISTENT, FLOAT}},
     {"HondaLaunchDvParams", {PERSISTENT, FLOAT}},
     {"HondaLaunchDvBreakParams", {PERSISTENT, FLOAT}},
