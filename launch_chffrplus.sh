@@ -19,12 +19,16 @@ function agnos_init {
 
   # Check if AGNOS update is required
   if [ $(< /VERSION) != "$AGNOS_VERSION" ]; then
-    AGNOS_PY="$DIR/openpilot/common/hardware/tici/agnos.py"
-    MANIFEST="$DIR/openpilot/system/hardware/tici/agnos.json"
+    AGNOS_PY="$DIR/openpilot/common/hardware/comma/agnos.py"
+    MANIFEST="$DIR/openpilot/system/hardware/comma/agnos.json"
+    # Stale updater zipapp still imports pyserial; repo root serial/ shim is on PYTHONPATH.
+    export PYTHONPATH="$DIR${PYTHONPATH:+:$PYTHONPATH}"
     if $AGNOS_PY --verify $MANIFEST; then
       sudo reboot
     fi
-    $DIR/openpilot/common/hardware/tici/updater $AGNOS_PY $MANIFEST
+    while true; do
+      $DIR/openpilot/common/hardware/comma/updater $AGNOS_PY $MANIFEST
+    done
   fi
 }
 

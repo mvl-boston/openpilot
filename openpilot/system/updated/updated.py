@@ -29,6 +29,27 @@ FINALIZED = os.path.join(STAGING_ROOT, "finalized")
 
 OVERLAY_INIT = Path(os.path.join(BASEDIR, ".overlay_init"))
 
+# Where agnos.json may live in the target checkout, depending on how old the
+# target branch is. Ordered from the current layout to the oldest one. The
+# current branch keeps symlinks at the legacy paths so that updaters running
+# pre-restructure code can also find the manifest when switching to it.
+AGNOS_MANIFEST_PATHS = [
+  "openpilot/system/hardware/comma/agnos.json",   # current layout
+  "openpilot/common/hardware/comma/agnos.json",   # direct common path
+  "openpilot/system/hardware/tici/agnos.json",    # upstream tici symlink layout
+  "system/hardware/tici/agnos.json",              # pre "mv root dirs into nested openpilot"
+  "selfdrive/hardware/tici/agnos.json",           # pre "rename selfdrive/hardware to system/hardware"
+  "openpilot/common/hardware/tici/agnos.json",    # pre tici -> comma rename
+]
+
+
+def get_agnos_manifest_path(basedir: str) -> str:
+  for rel_path in AGNOS_MANIFEST_PATHS:
+    manifest_path = os.path.join(basedir, rel_path)
+    if os.path.isfile(manifest_path):
+      return manifest_path
+  raise FileNotFoundError(f"no agnos.json found in {basedir}, tried: {AGNOS_MANIFEST_PATHS}")
+
 # do not allow to engage after this many hours onroad and this many routes
 HOURS_NO_CONNECTIVITY_MAX = 27
 ROUTES_NO_CONNECTIVITY_MAX = 84
@@ -193,7 +214,7 @@ def finalize_update() -> None:
 
 
 def handle_agnos_update() -> None:
-  from openpilot.common.hardware.tici.agnos import flash_agnos_update, get_target_slot_number
+  from openpilot.common.hardware.comma.agnos import flash_agnos_update, get_target_slot_number
 
   cur_version = HARDWARE.get_os_version()
   updated_version = run(["bash", "-c", r"unset AGNOS_VERSION && source launch_env.sh && \
@@ -207,13 +228,10 @@ def handle_agnos_update() -> None:
   set_consistent_flag(False)
 
   cloudlog.info(f"Beginning background installation for AGNOS {updated_version}")
-  set_offroad_alert("Offroad_NeosUpdate", True)
 
-  manifest_path = os.path.join(OVERLAY_MERGED, "openpilot/system/hardware/tici/agnos.json")
+  manifest_path = get_agnos_manifest_path(OVERLAY_MERGED)
   target_slot_number = get_target_slot_number()
   flash_agnos_update(manifest_path, target_slot_number, cloudlog)
-  set_offroad_alert("Offroad_NeosUpdate", False)
-
 
 
 class Updater:
