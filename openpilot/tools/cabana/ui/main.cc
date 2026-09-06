@@ -31,6 +31,7 @@ struct CabanaArgs {
   bool panda = false;
   bool no_vipc = false;
   bool no_cache = false;
+  bool pause_video = false;
   std::string panda_serial;
   std::string socketcan;
   std::string zmq;
@@ -63,6 +64,7 @@ void printUsage(const char *argv0) {
           "  --data_dir <dir>          local directory with routes\n"
           "  --no-vipc                 do not output video\n"
           "  --no-cache                turn off the local route file cache\n"
+          "  --pause-video             start with playback paused\n"
           "  --dbc <file>              dbc file to open\n",
           argv0);
 }
@@ -114,6 +116,8 @@ std::optional<int> parseArgs(int argc, char *argv[], CabanaArgs &args) {
       args.no_vipc = true;
     } else if (std::strcmp(a, "--no-cache") == 0) {
       args.no_cache = true;
+    } else if (std::strcmp(a, "--pause-video") == 0) {
+      args.pause_video = true;
     } else if (std::strcmp(a, "--dbc") == 0) {
       if (!takeValue(argc, argv, i, args.dbc)) return 1;
     } else if (a[0] == '-') {
@@ -198,5 +202,5 @@ int main(int argc, char *argv[]) {
     }
   }
 
-  return run(std::move(stream), std::move(stream_loader), args.dbc);
+  return run(std::move(stream), std::move(stream_loader), args.dbc, args.pause_video);
 }

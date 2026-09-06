@@ -26,6 +26,7 @@ Options:
   --data_dir <dir>          local directory with routes
   --no-vipc                 do not output video
   --no-cache                turn off the local route file cache
+  --pause-video             start with playback paused
   --dbc <file>              dbc file to open
 ```
 

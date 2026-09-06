@@ -23,7 +23,7 @@ struct GLFWwindow;
 
 class MainWindow {
 public:
-  MainWindow(GLFWwindow *window, std::unique_ptr<AbstractStream> stream, StreamLoader stream_loader, const std::string &dbc_file);
+  MainWindow(GLFWwindow *window, std::unique_ptr<AbstractStream> stream, StreamLoader stream_loader, const std::string &dbc_file, bool start_paused = false);
   ~MainWindow();
   void draw();
   void toggleChartsDocking();
@@ -114,6 +114,7 @@ private:
   float video_splitter_ratio_ = -1.0f;  // < 0: the video widget is at its size hint
   std::vector<std::unique_ptr<ToolDialog>> tool_dialogs_;
   bool closing_ = false;
+  bool start_paused_ = false;
   bool exited_ = false;
   bool window_modified_ = false;
   struct StatusBar {
