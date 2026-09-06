@@ -36,7 +36,7 @@ constexpr const char *CHARTS_WINDOW = "Charts###ChartsWindow";
 }  // namespace
 
 MainWindow::MainWindow(GLFWwindow *window, std::unique_ptr<AbstractStream> stream, StreamLoader stream_loader,
-                       const std::string &dbc_file) : window_(window) {
+                       const std::string &dbc_file, bool start_paused) : window_(window), start_paused_(start_paused) {
   can = &dummy_;
   video_splitter_ratio_ = inistate::main_window.video_splitter_ratio;
   messages_visible_ = inistate::main_window.messages_visible;
@@ -356,6 +356,10 @@ void MainWindow::startStream(std::unique_ptr<AbstractStream> stream, const std::
   stream_connections_.push_back(can->error.connect([](const std::string &msg) {
     MessageBox::warning("Error", msg);
   }));
+  if (start_paused_) {
+    can->pause(true);
+    start_paused_ = false;
+  }
   can->start();
 
   loadFile(dbc_file, SOURCE_ALL, [this]() {

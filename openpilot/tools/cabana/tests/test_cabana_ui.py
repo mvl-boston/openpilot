@@ -11,3 +11,4 @@ class TestCabanaUi(OpenpilotTestCase):
     result = subprocess.run(["./cabana", "-h"], cwd=CABANA_DIR, capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
     assert "Usage:" in result.stderr
+    assert "--pause-video" in result.stderr
