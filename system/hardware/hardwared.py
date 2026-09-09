@@ -28,6 +28,30 @@ from openpilot.system.athena.registration import UNREGISTERED_DONGLE_ID
 
 ThermalStatus = log.DeviceState.ThermalStatus
 NetworkType = log.DeviceState.NetworkType
+
+
+class HondaCanIgnitionDetector:
+  """Fallback when the harness SBU line was classified notConnected at boot."""
+
+  def __init__(self) -> None:
+    self.prev_counter_326: int | None = None
+    self.prev_counter_1a6: int | None = None
+    self.ignition = False
+
+  def update(self, can_msgs) -> bool:
+    for msg in can_msgs:
+      if msg.src != 0 or len(msg.dat) < 8:
+        continue
+      counter = msg.dat[7] >> 4
+      if msg.address == 0x326:
+        if self.prev_counter_326 is not None and counter == (self.prev_counter_326 + 1) % 4:
+          self.ignition = bool((msg.dat[3] >> 4) & 1)  # SCM_FEEDBACK MAIN_ON
+        self.prev_counter_326 = counter
+      elif msg.address == 0x1A6:
+        if self.prev_counter_1a6 is not None and counter == (self.prev_counter_1a6 + 1) % 4:
+          self.ignition = bool(msg.dat[5] >> 7)  # alt SCM_BUTTONS MAIN_ON
+        self.prev_counter_1a6 = counter
+    return self.ignition
 NetworkStrength = log.DeviceState.NetworkStrength
 CURRENT_TAU = 15.   # 15s time constant
 TEMP_TAU = 5.   # 5s time constant
@@ -151,7 +175,8 @@ def hw_state_thread(end_event, hw_queue):
 
 def hardware_thread(end_event, hw_queue) -> None:
   pm = messaging.PubMaster(['deviceState'])
-  sm = messaging.SubMaster(["peripheralState", "gpsLocationExternal", "selfdriveState", "pandaStates"], poll="pandaStates")
+  sm = messaging.SubMaster(["peripheralState", "gpsLocationExternal", "selfdriveState", "pandaStates", "can"], poll="pandaStates")
+  honda_can_ignition = HondaCanIgnitionDetector()
 
   count = 0
 
@@ -220,7 +245,15 @@ def hardware_thread(end_event, hw_queue) -> None:
 
       in_car = pandaState.harnessStatus != log.PandaState.HarnessStatus.notConnected
 
-    elif (time.monotonic() - sm.recv_time['pandaStates']) > DISCONNECT_TIMEOUT:
+    # Honda CAN ignition fallback: if the harness was classified notConnected at boot (key off,
+    # both SBU lines high), panda won't read the ignition GPIO until orientation is re-detected.
+    if (not onroad_conditions["ignition"]) and sm.updated['can']:
+      if honda_can_ignition.update(sm['can']):
+        onroad_conditions["ignition"] = True
+        if len(pandaStates) > 0 and pandaStates[0].harnessStatus == log.PandaState.HarnessStatus.notConnected:
+          in_car = True
+
+    if (time.monotonic() - sm.recv_time['pandaStates']) > DISCONNECT_TIMEOUT:
       if onroad_conditions["ignition"]:
         onroad_conditions["ignition"] = False
         cloudlog.error("panda timed out onroad")
