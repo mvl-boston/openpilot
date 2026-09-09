@@ -21,10 +21,25 @@ function agnos_init {
   if [ $(< /VERSION) != "$AGNOS_VERSION" ]; then
     AGNOS_PY="$DIR/system/hardware/tici/agnos.py"
     MANIFEST="$DIR/system/hardware/tici/agnos.json"
+    # We are running on a foreign AGNOS (e.g. after a branch switch). Newer AGNOS
+    # dropped pyserial, which agnos.py's import chain and the updater zipapp still
+    # need; only shim it in when the running OS really lacks it.
+    if ! python3 -c "import serial" 2> /dev/null; then
+      export PYTHONPATH="$DIR/system/hardware/tici/pyserial_compat${PYTHONPATH:+:$PYTHONPATH}"
+    fi
     if $AGNOS_PY --verify $MANIFEST; then
       sudo reboot
     fi
-    $DIR/system/hardware/tici/updater $AGNOS_PY $MANIFEST
+    # Never fall through to manager on a mismatched AGNOS; keep the updater UI up until
+    # it has flashed and rebooted us (same as upstream #38672). The updater normally
+    # reboots the device itself, so reaching the headless fallback means the UI died;
+    # if we have network, flash and swap without it.
+    while true; do
+      $DIR/system/hardware/tici/updater $AGNOS_PY $MANIFEST
+      if $AGNOS_PY --swap $MANIFEST; then
+        sudo reboot
+      fi
+    done
   fi
 }
 
