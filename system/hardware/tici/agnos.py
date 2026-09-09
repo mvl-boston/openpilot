@@ -10,8 +10,6 @@ from collections.abc import Generator
 
 import requests
 
-import openpilot.system.updated.casync.casync as casync
-
 SPARSE_CHUNK_FMT = struct.Struct('H2xI4x')
 CAIBX_URL = "https://commadist.azureedge.net/agnosupdate/"
 
@@ -188,6 +186,11 @@ def extract_compressed_image(target_slot_number: int, partition: dict, cloudlog)
 
 
 def extract_casync_image(target_slot_number: int, partition: dict, cloudlog):
+  # casync pulls in swaglog -> system.hardware -> pyserial. Keep that out of the
+  # module import so `agnos.py --verify` can run on an AGNOS this branch wasn't
+  # built for (first boot after a branch switch), where those deps may be missing.
+  import openpilot.system.updated.casync.casync as casync
+
   path = get_partition_path(target_slot_number, partition)
   seed_path = path[:-1] + ('b' if path[-1] == 'a' else 'a')
 
