@@ -8,8 +8,8 @@ from openpilot.common.basedir import BASEDIR
 from openpilot.common.params import Params
 from openpilot.common.time_helpers import system_time_valid
 from openpilot.system.ui.widgets.scroller import NavRawScrollPanel, NavScroller
-from openpilot.selfdrive.ui.mici.widgets.button import BigButton, BigCircleButton
-from openpilot.selfdrive.ui.mici.widgets.dialog import BigDialog, BigConfirmationDialog
+from openpilot.selfdrive.ui.mici.widgets.button import BigButton, BigCircleButton, COMPLICATION_GREY, LABEL_COLOR
+from openpilot.selfdrive.ui.mici.widgets.dialog import BigDialog, BigConfirmationDialog, BigInputDialog
 from openpilot.selfdrive.ui.mici.widgets.pairing_dialog import PairingDialog
 from openpilot.selfdrive.ui.mici.onroad.driver_camera_dialog import DriverCameraDialog
 from openpilot.selfdrive.ui.mici.layouts.onboarding import TrainingGuide, TermsPage
@@ -165,6 +165,8 @@ class PairBigButton(BigButton):
 
 
 UPDATER_TIMEOUT = 10.0  # seconds to wait for updater to respond
+# same green as the keyboard enter pill (icons_mici/settings/keyboard/enter.png)
+DOWNLOAD_READY_GREEN = rl.Color(16, 104, 38, 207)
 
 
 class UpdateOpenpilotBigButton(BigButton):
@@ -177,6 +179,7 @@ class UpdateOpenpilotBigButton(BigButton):
     self._waiting_for_updater_t: float | None = None
     self._hide_value_t: float | None = None
     self._state: UpdaterState = UpdaterState.IDLE
+    self._download_ready = False
 
     ui_state.add_offroad_transition_callback(self.offroad_transition)
 
@@ -213,11 +216,34 @@ class UpdateOpenpilotBigButton(BigButton):
     else:
       self.set_text("update openpilot")
 
+  def _set_download_ready(self, ready: bool):
+    # Make the "download update" state stand out so users know it's the next step
+    if ready == self._download_ready:
+      return
+    self._download_ready = ready
+    self._sub_label.set_text_color(LABEL_COLOR if ready else COMPLICATION_GREY)
+
+  def _handle_background(self) -> tuple[rl.Texture, float, float, float]:
+    txt_bg, btn_x, btn_y, scale = super()._handle_background()
+    # brighten the button while a download is ready
+    if self._download_ready and self.enabled and not self.is_pressed:
+      txt_bg = self._txt_pressed_bg
+    return txt_bg, btn_x, btn_y, scale
+
+  def _draw_content(self, btn_y: float):
+    if self._download_ready and self._txt_icon:
+      # white icon on a green disc, echoing the keyboard enter arrow that led here
+      x = self._rect.x + self._rect.width - 30 - self._txt_icon.width / 2
+      y = btn_y + 30 + self._txt_icon.height / 2
+      rl.draw_circle(int(x), int(y), 50, DOWNLOAD_READY_GREEN)
+    super()._draw_content(btn_y)
+
   def _update_state(self):
     super()._update_state()
 
     if ui_state.started:
       self.set_enabled(False)
+      self._set_download_ready(False)
       return
 
     updater_state = ui_state.params.get("UpdaterState") or ""
@@ -281,6 +307,8 @@ class UpdateOpenpilotBigButton(BigButton):
         if self.get_value() != "":
           self.set_value("")
 
+    self._set_download_ready(self._state == UpdaterState.IDLE and self.get_value() == "download update" and self.enabled)
+
     if self._state != UpdaterState.WAITING_FOR_UPDATER:
       self._waiting_for_updater_t = None
 
@@ -337,9 +365,26 @@ class DeviceLayoutMici(NavScroller):
     terms_btn = BigButton("terms &\nconditions", "", gui_app.texture("icons_mici/settings/device/info.png", 64, 64))
     terms_btn.set_click_callback(lambda: gui_app.push_widget(ReviewTermsPage()))
 
+    def switch_branch_handle_selection(new_branch: str):
+      if new_branch:
+        ui_state.params.put("UpdaterTargetBranch", new_branch)
+        os.system("pkill -SIGUSR1 -f system.updated.updated")
+        self._scroller.scroll_panel.set_offset(-300)
+
+    def switch_branch_clicked():
+      current_branch = ui_state.params.get("GitBranch") or ""
+      dlg = BigInputDialog("enter mvl_boston/", current_branch, minimum_length=1,
+                           confirm_callback=switch_branch_handle_selection)
+      gui_app.push_widget(dlg)
+      return
+
+    switch_branch_btn = BigButton("switch branch", "", gui_app.texture("icons_mici/settings/device/update.png", 64, 64))
+    switch_branch_btn.set_click_callback(switch_branch_clicked)
+
     self._scroller.add_widgets([
       DeviceInfoLayoutMici(),
       UpdateOpenpilotBigButton(),
+      switch_branch_btn,
       PairBigButton(),
       review_training_guide_btn,
       driver_cam_btn,
