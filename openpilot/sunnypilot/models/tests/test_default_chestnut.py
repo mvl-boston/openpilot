@@ -136,8 +136,8 @@ class TestDefaultChestnutHelpers(OpenpilotTestCase):
     with mock.patch("openpilot.sunnypilot.models.default_chestnut.chestnut_compiled", return_value=False):
       assert needs_default_chestnut_download(params, chestnut_present=True) is True
 
-    params.get.return_value = {"ref": "custom"}
-    with mock.patch("openpilot.sunnypilot.models.default_chestnut.chestnut_compiled", return_value=False):
+    with mock.patch("openpilot.sunnypilot.models.default_chestnut.chestnut_compiled", return_value=False), \
+         mock.patch("openpilot.sunnypilot.models.default_chestnut.get_selected_bundle", return_value={"ref": "custom"}):
       assert needs_default_chestnut_download(params, chestnut_present=True) is False
 
 
@@ -167,13 +167,13 @@ class TestResolveDefaultChestnutArtifact(OpenpilotTestCase):
     bundle.displayName = "Lebowski"
     bundle.internalName = "LEBOWSKI"
     bundle.index = 0
+    bundle.init('models', 1)
     model = bundle.models[0]
     model.type = "supercombo"
     model.artifact.fileName = CANONICAL_PKL
     model.artifact.downloadUri.uri = "https://example.com/big_driving_tinygrad.pkl"
-    chunk = custom.ModelManagerSP.Chunk.new_message()
-    chunk.sha256 = "111"
-    model.artifact.chunks = [chunk]
+    model.artifact.init('chunks', 1)
+    model.artifact.chunks[0].sha256 = "111"
 
     with mock.patch("openpilot.sunnypilot.models.default_chestnut.read_bundled_big_onnx_hash", return_value=BMRLNAP_ONNX), \
          mock.patch("openpilot.sunnypilot.models.default_chestnut.fetch_hf_defaults", return_value=HF_DEFAULTS), \
@@ -187,13 +187,13 @@ class TestResolveDefaultChestnutArtifact(OpenpilotTestCase):
     bundle.displayName = "BMRLNAP Model v4"
     bundle.internalName = "BMRLNAP"
     bundle.index = 1
+    bundle.init('models', 1)
     model = bundle.models[0]
     model.type = "supercombo"
     model.artifact.fileName = CANONICAL_PKL
     model.artifact.downloadUri.uri = "https://example.com/big_driving_tinygrad.pkl"
-    chunk = custom.ModelManagerSP.Chunk.new_message()
-    chunk.sha256 = "111"
-    model.artifact.chunks = [chunk]
+    model.artifact.init('chunks', 1)
+    model.artifact.chunks[0].sha256 = "111"
 
     with mock.patch("openpilot.sunnypilot.models.default_chestnut.read_bundled_big_onnx_hash", return_value=BMRLNAP_ONNX), \
          mock.patch("openpilot.sunnypilot.models.default_chestnut.fetch_hf_defaults", return_value=HF_DEFAULTS), \
