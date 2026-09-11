@@ -143,11 +143,11 @@ def artifact_from_hf_bundle(bundle: dict, canonical_name: str = CANONICAL_PKL) -
   artifact.downloadUri.uri = pkl_url.rsplit("/", 1)[0] + "/" + canonical_name
   artifact.downloadUri.sha256 = download_uri.get("sha256", "")
 
-  for chunk_data in chunks_data:
-    chunk = custom.ModelManagerSP.Chunk.new_message()
+  artifact.init('chunks', len(chunks_data))
+  for i, chunk_data in enumerate(chunks_data):
+    chunk = artifact.chunks[i]
     chunk.fileName = chunk_data.get("file_name", "")
     chunk.sha256 = chunk_data.get("sha256", "")
-    artifact.chunks.append(chunk)
 
   return artifact
 
@@ -163,11 +163,11 @@ def artifact_from_manifest_bundle(bundle: custom.ModelManagerSP.ModelBundle,
   artifact.fileName = source.fileName
   artifact.downloadUri.uri = source.downloadUri.uri
   artifact.downloadUri.sha256 = source.downloadUri.sha256
-  for chunk in source.chunks:
-    copied = custom.ModelManagerSP.Chunk.new_message()
+  artifact.init('chunks', len(source.chunks))
+  for i, chunk in enumerate(source.chunks):
+    copied = artifact.chunks[i]
     copied.fileName = chunk.fileName
     copied.sha256 = chunk.sha256
-    artifact.chunks.append(copied)
 
   return artifact, source.fileName
 
