@@ -12,6 +12,7 @@
 #ifdef __linux__
 #include "tools/cabana/streams/socketcanstream.h"
 #endif
+#include "tools/cabana/utils/qtutil.h"
 
 namespace {
 
@@ -19,8 +20,8 @@ struct CabanaArgs {
   bool demo = false;
   bool auto_source = false;
   bool qcam = false;
-  bool ecam = false;
-  bool dcam = false;
+  bool wide_road = false;
+  bool cabin = false;
   bool msgq = false;
   bool panda = false;
   bool no_vipc = false;
@@ -44,8 +45,8 @@ void printUsage(const char *argv0) {
           "  --auto                    Auto load the route from the best available source (no video):\n"
           "                            internal, openpilotci, comma_api, car_segments, testing_closet\n"
           "  --qcam                    load qcamera\n"
-          "  --ecam                    load wide road camera\n"
-          "  --dcam                    load driver camera\n"
+          "  --wide-road               load wide road camera (alias: --ecam)\n"
+          "  --cabin                   load cabin camera (alias: --dcam)\n"
           "  --msgq                    read can messages from the msgq\n"
           "  --panda                   read can messages from panda\n"
           "  --panda-serial <serial>   read can messages from panda with given serial\n"
@@ -83,10 +84,10 @@ int parseArgs(int argc, char *argv[], CabanaArgs &args, bool &ok) {
       args.auto_source = true;
     } else if (std::strcmp(a, "--qcam") == 0) {
       args.qcam = true;
-    } else if (std::strcmp(a, "--ecam") == 0) {
-      args.ecam = true;
-    } else if (std::strcmp(a, "--dcam") == 0) {
-      args.dcam = true;
+    } else if (std::strcmp(a, "--wide-road") == 0 || std::strcmp(a, "--ecam") == 0) {
+      args.wide_road = true;
+    } else if (std::strcmp(a, "--cabin") == 0 || std::strcmp(a, "--dcam") == 0) {
+      args.cabin = true;
     } else if (std::strcmp(a, "--msgq") == 0) {
       args.msgq = true;
     } else if (std::strcmp(a, "--panda") == 0) {
@@ -134,7 +135,14 @@ int main(int argc, char *argv[]) {
   app.setApplicationDisplayName("Cabana");
   //app.setWindowIcon(QIcon(":cabana-icon.png"));  // TODO: do this in imgui
 
-  UnixSignalHandler signalHandler;
+  // Marshal exit onto the GUI thread (qApp methods are not thread-safe).
+  UnixSignalHandler signalHandler([]() {
+    QMetaObject::invokeMethod(qApp, []() {
+      printf("\nexiting...\n");
+      qApp->closeAllWindows();
+      qApp->exit();
+    }, Qt::QueuedConnection);
+  });
   utils::setTheme(settings.theme);
 
   CabanaArgs args;
@@ -146,25 +154,25 @@ int main(int argc, char *argv[]) {
   AbstractStream *stream = nullptr;
 
   if (args.msgq) {
-    stream = new DeviceStream(&app);
+    stream = new DeviceStream();
   } else if (!args.zmq.empty()) {
-    stream = new DeviceStream(&app, QString::fromStdString(args.zmq));
+    stream = new DeviceStream(args.zmq);
   } else if (args.panda || !args.panda_serial.empty()) {
     try {
-      stream = new PandaStream(&app, {.serial = args.panda_serial});
+      stream = new PandaStream({.serial = args.panda_serial});
     } catch (std::exception &e) {
       fprintf(stderr, "%s\n", e.what());
       return 0;
     }
 #ifdef __linux__
   } else if (SocketCanStream::available() && !args.socketcan.empty()) {
-    stream = new SocketCanStream(&app, {.device = args.socketcan});
+    stream = new SocketCanStream({.device = args.socketcan});
 #endif
   } else {
     uint32_t replay_flags = REPLAY_FLAG_NONE;
-    if (args.ecam) replay_flags |= REPLAY_FLAG_ECAM;
+    if (args.wide_road) replay_flags |= REPLAY_FLAG_WIDE_ROAD;
     if (args.qcam) replay_flags |= REPLAY_FLAG_QCAMERA;
-    if (args.dcam) replay_flags |= REPLAY_FLAG_DCAM;
+    if (args.cabin) replay_flags |= REPLAY_FLAG_CABIN_CAMERA;
     if (args.no_vipc) replay_flags |= REPLAY_FLAG_NO_VIPC;
 
     QString route;
@@ -174,7 +182,8 @@ int main(int argc, char *argv[]) {
       route = DEMO_ROUTE;
     }
     if (!route.isEmpty()) {
-      auto replay_stream = std::make_unique<ReplayStream>(&app);
+      auto replay_stream = std::make_unique<ReplayStream>();
+      Connection err = replay_stream->error.connect([](const std::string &msg) { fprintf(stderr, "%s\n", msg.c_str()); });
       if (!replay_stream->loadRoute(route.toStdString(), args.data_dir, replay_flags, args.auto_source)) {
         return 0;
       }
