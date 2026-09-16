@@ -22,6 +22,14 @@ STATE_TO_DISPLAY_TEXT = {
 }
 
 
+def _updater_display_text(updater_state: str) -> str:
+  if updater_state == "downloading...":
+    progress = ui_state.params.get("UpdaterProgress")
+    if progress is not None:
+      return f"{tr('downloading...')} {int(progress)}%"
+  return STATE_TO_DISPLAY_TEXT.get(updater_state, updater_state)
+
+
 def time_ago(date: datetime.datetime | None) -> str:
   if not date:
     return tr("never")
@@ -109,7 +117,7 @@ class SoftwareLayout(Widget):
       self._waiting_for_updater = False
       self._download_btn.action_item.set_enabled(False)
       # Use the mapping, with a fallback to the original state string
-      display_text = STATE_TO_DISPLAY_TEXT.get(updater_state, updater_state)
+      display_text = _updater_display_text(updater_state)
       self._download_btn.action_item.set_value(display_text)
     else:
       if failed_count > 0:
