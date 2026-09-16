@@ -201,11 +201,14 @@ class MiciHomeLayout(Widget):
 
   def _get_version_text(self) -> tuple[str, str, str, str] | None:
     version = ui_state.params.get("Version")
-    branch = ui_state.params.get("GitBranch") + " " + ui_state.params.get("GitCommit")[:7]
+    git_branch = ui_state.params.get("GitBranch")
+    git_commit = ui_state.params.get("GitCommit")
     commit = "https://buymeacoffee.com/mvlboston"
 
-    if not all((version, branch, commit)):
+    if not all((version, git_branch, git_commit, commit)):
       return None
+
+    branch = git_branch + " " + git_commit[:7]
 
     commit_date_raw = ui_state.params.get("GitCommitDate")
     try:
