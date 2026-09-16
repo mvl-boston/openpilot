@@ -271,10 +271,12 @@ class SoftwareLayoutMici(NavScroller):
   def __init__(self):
     super().__init__()
 
+    check_update_btn = CheckUpdateButton()
+
     def switch_branch_handle_selection(new_branch: str):
       if new_branch:
         ui_state.params.put("UpdaterTargetBranch", new_branch, block=True)
-        subprocess.run("pkill -SIGUSR1 -f openpilot.system.updated.updated", shell=True)
+        check_update_btn.check_for_update()
         self._scroller.scroll_panel.set_offset(-300)
 
     def switch_branch_clicked():
@@ -294,7 +296,6 @@ class SoftwareLayoutMici(NavScroller):
                                                         gui_app.texture("icons_mici/settings/device/uninstall.png", 64, 64),
                                                         uninstall_openpilot_callback, exit_on_confirm=False)
 
-    check_update_btn = CheckUpdateButton()
     self._scroller.add_widgets([
       SoftwareInfoLayoutMici(),
       check_update_btn,
