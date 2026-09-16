@@ -7,6 +7,7 @@ import shutil
 import signal
 import fcntl
 import threading
+from collections.abc import Callable
 from collections import defaultdict
 from pathlib import Path
 
@@ -89,6 +90,41 @@ def write_time_to_param(params, param) -> None:
 
 def run(cmd: list[str], cwd: str | None = None) -> str:
   return subprocess.check_output(cmd, cwd=cwd, stderr=subprocess.STDOUT, encoding='utf8')
+
+
+def put_updater_progress(params: Params, pct: int) -> None:
+  params.put("UpdaterProgress", max(0, min(100, int(pct))))
+
+
+def clear_updater_progress(params: Params) -> None:
+  params.remove("UpdaterProgress")
+
+
+def git_fetch_with_progress(params: Params, branch: str, cwd: str, start_pct: int, end_pct: int) -> None:
+  proc = subprocess.Popen(
+    ["git", "fetch", "--progress", "origin", branch],
+    cwd=cwd,
+    stdout=subprocess.PIPE,
+    stderr=subprocess.PIPE,
+    encoding="utf8",
+    errors="replace",
+  )
+  assert proc.stderr is not None
+  output_lines: list[str] = []
+  while True:
+    line = proc.stderr.readline()
+    if not line:
+      if proc.poll() is not None:
+        break
+      continue
+    output_lines.append(line)
+    match = re.search(r"(\d+)%", line)
+    if match:
+      frac = int(match.group(1)) / 100
+      put_updater_progress(params, start_pct + int((end_pct - start_pct) * frac))
+  if proc.wait() != 0:
+    raise subprocess.CalledProcessError(proc.returncode or 1, proc.args, output="".join(output_lines))
+  put_updater_progress(params, end_pct)
 
 
 def set_consistent_flag(consistent: bool) -> None:
@@ -213,7 +249,7 @@ def finalize_update() -> None:
   cloudlog.info("done finalizing overlay")
 
 
-def handle_agnos_update() -> None:
+def handle_agnos_update(progress_cb: Callable[[int], None] | None = None) -> None:
   from openpilot.common.hardware.comma.agnos import flash_agnos_update, get_target_slot_number
 
   cur_version = HARDWARE.get_os_version()
@@ -222,6 +258,8 @@ def handle_agnos_update() -> None:
 
   cloudlog.info(f"AGNOS version check: {cur_version} vs {updated_version}")
   if cur_version == updated_version:
+    if progress_cb is not None:
+      progress_cb(100)
     return
 
   # prevent an openpilot getting swapped in with a mismatched or partially downloaded agnos
@@ -231,7 +269,7 @@ def handle_agnos_update() -> None:
 
   manifest_path = get_agnos_manifest_path(OVERLAY_MERGED)
   target_slot_number = get_target_slot_number()
-  flash_agnos_update(manifest_path, target_slot_number, cloudlog)
+  flash_agnos_update(manifest_path, target_slot_number, cloudlog, progress_cb=progress_cb)
 
 
 class Updater:
@@ -379,6 +417,7 @@ class Updater:
   def fetch_update(self) -> None:
     cloudlog.info("attempting git fetch inside staging overlay")
 
+    put_updater_progress(self.params, 0)
     self.params.put("UpdaterState", "downloading...", block=True)
 
     # TODO: cleanly interrupt this and invalidate old update
@@ -390,8 +429,8 @@ class Updater:
     run(["git", "config", "--replace-all", "remote.origin.fetch", "+refs/heads/*:refs/remotes/origin/*"], OVERLAY_MERGED)
 
     branch = self.target_branch
-    git_fetch_output = run(["git", "fetch", "origin", branch], OVERLAY_MERGED)
-    cloudlog.info("git fetch success: %s", git_fetch_output)
+    git_fetch_with_progress(self.params, branch, OVERLAY_MERGED, 5, 45)
+    cloudlog.info("git fetch success")
 
     cloudlog.info("git reset in progress")
     cmds = [
@@ -403,16 +442,24 @@ class Updater:
       ["git", "submodule", "update", "--init", "--recursive"],
       ["git", "submodule", "foreach", "--recursive", "git", "reset", "--hard"],
     ]
-    r = [run(cmd, OVERLAY_MERGED) for cmd in cmds]
-    cloudlog.info("git reset success: %s", '\n'.join(r))
+    for i, cmd in enumerate(cmds):
+      run(cmd, OVERLAY_MERGED)
+      put_updater_progress(self.params, 45 + int(25 * (i + 1) / len(cmds)))
+    cloudlog.info("git reset success")
 
-    # TODO: show agnos download progress
     if AGNOS:
-      handle_agnos_update()
+      def agnos_progress(p: int) -> None:
+        put_updater_progress(self.params, 70 + int(25 * p / 100))
+
+      handle_agnos_update(agnos_progress)
+    else:
+      put_updater_progress(self.params, 95)
 
     # Create the finalized, ready-to-swap update
     self.params.put("UpdaterState", "finalizing update...", block=True)
+    put_updater_progress(self.params, 98)
     finalize_update()
+    put_updater_progress(self.params, 100)
     cloudlog.info("finalize success!")
 
 
@@ -470,6 +517,7 @@ def main() -> None:
 
         # check for update
         params.put("UpdaterState", "checking...", block=True)
+        clear_updater_progress(params)
         updater.check_for_update()
 
         # download update
@@ -500,6 +548,7 @@ def main() -> None:
 
       try:
         params.put("UpdaterState", "idle", block=True)
+        clear_updater_progress(params)
         update_successful = (update_failed_count == 0)
         updater.set_params(update_successful, update_failed_count, exception)
       except Exception:
