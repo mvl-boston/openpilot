@@ -178,7 +178,8 @@ class TestResolveDefaultChestnutArtifact(OpenpilotTestCase):
     with mock.patch("openpilot.sunnypilot.models.default_chestnut.read_bundled_big_onnx_hash", return_value=BMRLNAP_ONNX), \
          mock.patch("openpilot.sunnypilot.models.default_chestnut.fetch_hf_defaults", return_value=HF_DEFAULTS), \
          mock.patch("openpilot.sunnypilot.models.default_chestnut.read_default_big_model_fields",
-                    return_value={"DEFAULT_BIG_MODEL": "Lebowski", "DEFAULT_BIG_MODEL_REF": "lebowski-ref"}):
+                    return_value={"DEFAULT_BIG_MODEL": "Lebowski", "DEFAULT_BIG_MODEL_REF": "lebowski-ref"}), \
+         mock.patch("openpilot.sunnypilot.models.default_chestnut._bundle_for_onnx", return_value=None):
       assert resolve_default_chestnut_artifact({"chestnut": [bundle]}) is None
 
   def test_allows_manifest_when_hf_confirms_ref(self):
