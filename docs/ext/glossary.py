@@ -8,7 +8,7 @@ from markdown.extensions import Extension
 from markdown.preprocessors import Preprocessor
 from markdown.treeprocessors import Treeprocessor
 
-from zensical.extensions.links import LinksProcessor
+from zensical.extensions.links import LinksTreeprocessor
 
 GlossaryTerm = tuple[str, re.Pattern[str], str]
 
