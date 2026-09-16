@@ -195,17 +195,32 @@ class UpdateOpenpilotBigButton(BigButton):
       gui_app.push_widget(dlg)
       return
 
+    if self.get_value() == "update now":
+      self.set_enabled(False)
+      self._state = UpdaterState.WAITING_FOR_UPDATER
+      self.set_icon(self._txt_update_icon)
+
+      def run():
+        ui_state.params.put_bool("DoReboot", True, block=True)
+
+      threading.Thread(target=run, daemon=True).start()
+    elif self.get_value() == "download update":
+      self._signal_updater("SIGHUP")
+    else:
+      self._signal_updater("SIGUSR1")
+
+  def check_for_update(self):
+    self._signal_updater("SIGUSR1")
+
+  def _signal_updater(self, sig: str):
     self.set_enabled(False)
     self._state = UpdaterState.WAITING_FOR_UPDATER
+    self._hide_value_t = None
+    self.set_value("")
     self.set_icon(self._txt_update_icon)
 
     def run():
-      if self.get_value() == "download update":
-        os.system("pkill -SIGHUP -f system.updated.updated")
-      elif self.get_value() == "update now":
-        ui_state.params.put_bool("DoReboot", True)
-      else:
-        os.system("pkill -SIGUSR1 -f system.updated.updated")
+      os.system(f"pkill -{sig} -f system.updated.updated")
 
     threading.Thread(target=run, daemon=True).start()
 
@@ -365,10 +380,12 @@ class DeviceLayoutMici(NavScroller):
     terms_btn = BigButton("terms &\nconditions", "", gui_app.texture("icons_mici/settings/device/info.png", 64, 64))
     terms_btn.set_click_callback(lambda: gui_app.push_widget(ReviewTermsPage()))
 
+    update_btn = UpdateOpenpilotBigButton()
+
     def switch_branch_handle_selection(new_branch: str):
       if new_branch:
         ui_state.params.put("UpdaterTargetBranch", new_branch)
-        os.system("pkill -SIGUSR1 -f system.updated.updated")
+        update_btn.check_for_update()
         self._scroller.scroll_panel.set_offset(-300)
 
     def switch_branch_clicked():
@@ -383,7 +400,7 @@ class DeviceLayoutMici(NavScroller):
 
     self._scroller.add_widgets([
       DeviceInfoLayoutMici(),
-      UpdateOpenpilotBigButton(),
+      update_btn,
       switch_branch_btn,
       PairBigButton(),
       review_training_guide_btn,
