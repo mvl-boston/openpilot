@@ -20,6 +20,7 @@ from openpilot.common.swaglog import cloudlog
 from openpilot.selfdrive.selfdrived.alertmanager import set_offroad_alert
 from openpilot.system.hardware import AGNOS, HARDWARE
 from openpilot.system.version import get_build_metadata
+from openpilot.system.updated.branch_switch_compat import apply_branch_switch_compat, is_agnos_downgrade
 
 LOCK_FILE = os.getenv("UPDATER_LOCK_FILE", "/tmp/safe_staging_overlay.lock")
 STAGING_ROOT = os.getenv("UPDATER_STAGING_ROOT", "/data/safe_staging")
@@ -218,6 +219,8 @@ def finalize_update() -> None:
     cloudlog.event("Done git cleanup", duration=time.monotonic() - t)
   except subprocess.CalledProcessError:
     cloudlog.exception(f"Failed git cleanup, took {time.monotonic() - t:.3f} s")
+
+  apply_branch_switch_compat(FINALIZED)
 
   set_consistent_flag(True)
   cloudlog.info("done finalizing overlay")
