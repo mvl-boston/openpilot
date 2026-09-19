@@ -229,8 +229,7 @@ def handle_agnos_update() -> None:
 
   if is_agnos_downgrade(cur_version, updated_version):
     cloudlog.info(
-      f"Deferring AGNOS downgrade {cur_version} -> {updated_version}; "
-      "target tree will be patched for foreign AGNOS boot on finalize"
+      f"Deferring AGNOS downgrade {cur_version} -> {updated_version}; target tree will be patched for foreign AGNOS boot on finalize"
     )
     return
 
