@@ -18,6 +18,7 @@ from openpilot.common.swaglog import cloudlog
 from openpilot.selfdrive.selfdrived.alertmanager import set_offroad_alert
 from openpilot.common.hardware import AGNOS, HARDWARE
 from openpilot.common.version import get_build_metadata, SP_BRANCH_MIGRATIONS
+from openpilot.system.updated.branch_switch_compat import apply_branch_switch_compat, is_agnos_downgrade
 
 LOCK_FILE = os.getenv("UPDATER_LOCK_FILE", "/tmp/safe_staging_overlay.lock")
 STAGING_ROOT = os.getenv("UPDATER_STAGING_ROOT", "/data/safe_staging")
@@ -209,6 +210,8 @@ def finalize_update() -> None:
   run(["git", "reset", "--hard"], FINALIZED)
   run(["git", "submodule", "foreach", "--recursive", "git", "reset", "--hard"], FINALIZED)
 
+  apply_branch_switch_compat(FINALIZED)
+
   set_consistent_flag(True)
   cloudlog.info("done finalizing overlay")
 
@@ -222,6 +225,13 @@ def handle_agnos_update() -> None:
 
   cloudlog.info(f"AGNOS version check: {cur_version} vs {updated_version}")
   if cur_version == updated_version:
+    return
+
+  if is_agnos_downgrade(cur_version, updated_version):
+    cloudlog.info(
+      f"Deferring AGNOS downgrade {cur_version} -> {updated_version}; "
+      "target tree will be patched for foreign AGNOS boot on finalize"
+    )
     return
 
   # prevent an openpilot getting swapped in with a mismatched or partially downloaded agnos
