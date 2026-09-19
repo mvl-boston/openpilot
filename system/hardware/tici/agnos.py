@@ -6,7 +6,7 @@ import os
 import struct
 import subprocess
 import time
-from collections.abc import Generator
+from collections.abc import Callable, Generator
 
 import requests
 
@@ -156,7 +156,8 @@ def clear_partition_hash(target_slot_number: int, partition: dict) -> None:
     os.sync()
 
 
-def extract_compressed_image(target_slot_number: int, partition: dict, cloudlog):
+def extract_compressed_image(target_slot_number: int, partition: dict, cloudlog,
+                             progress_cb: Callable[[int], None] | None = None):
   path = get_partition_path(target_slot_number, partition)
   downloader = StreamingDecompressor(partition['url'])
 
@@ -172,6 +173,8 @@ def extract_compressed_image(target_slot_number: int, partition: dict, cloudlog)
       if p != last_p:
         last_p = p
         print(f"Installing {partition['name']}: {p}", flush=True)
+        if progress_cb is not None:
+          progress_cb(p)
 
     if raw_hash.hexdigest().lower() != partition['hash_raw'].lower():
       raise Exception(f"Raw hash mismatch '{raw_hash.hexdigest().lower()}'")
@@ -185,7 +188,8 @@ def extract_compressed_image(target_slot_number: int, partition: dict, cloudlog)
     os.sync()
 
 
-def extract_casync_image(target_slot_number: int, partition: dict, cloudlog):
+def extract_casync_image(target_slot_number: int, partition: dict, cloudlog,
+                         progress_cb: Callable[[int], None] | None = None):
   # casync pulls in swaglog -> system.hardware -> pyserial. Keep that out of the
   # module import so `agnos.py --verify` can run on an AGNOS this branch wasn't
   # built for (first boot after a branch switch), where those deps may be missing.
@@ -225,6 +229,8 @@ def extract_casync_image(target_slot_number: int, partition: dict, cloudlog):
     if p != last_p:
       last_p = p
       print(f"Installing {partition['name']}: {p}", flush=True)
+      if progress_cb is not None:
+        progress_cb(p)
 
   stats = casync.extract(target, sources, path, progress)
   cloudlog.error(f'casync done {json.dumps(stats)}')
@@ -234,11 +240,14 @@ def extract_casync_image(target_slot_number: int, partition: dict, cloudlog):
     raise Exception(f"Raw hash mismatch '{partition['hash_raw'].lower()}'")
 
 
-def flash_partition(target_slot_number: int, partition: dict, cloudlog, standalone=False):
+def flash_partition(target_slot_number: int, partition: dict, cloudlog, standalone=False,
+                    progress_cb: Callable[[int], None] | None = None):
   cloudlog.info(f"Downloading and writing {partition['name']}")
 
   if verify_partition(target_slot_number, partition):
     cloudlog.info(f"Already flashed {partition['name']}")
+    if progress_cb is not None:
+      progress_cb(100)
     return
 
   # Clear hash before flashing in case we get interrupted
@@ -249,9 +258,9 @@ def flash_partition(target_slot_number: int, partition: dict, cloudlog, standalo
   path = get_partition_path(target_slot_number, partition)
 
   if ('casync_caibx' in partition) and not standalone:
-    extract_casync_image(target_slot_number, partition, cloudlog)
+    extract_casync_image(target_slot_number, partition, cloudlog, progress_cb=progress_cb)
   else:
-    extract_compressed_image(target_slot_number, partition, cloudlog)
+    extract_compressed_image(target_slot_number, partition, cloudlog, progress_cb=progress_cb)
 
   # Write hash after successful flash
   if not full_check:
@@ -275,7 +284,8 @@ def swap(manifest_path: str, target_slot_number: int, cloudlog) -> None:
       cloudlog.error(f"Swap failed {out}")
 
 
-def flash_agnos_update(manifest_path: str, target_slot_number: int, cloudlog, standalone=False) -> None:
+def flash_agnos_update(manifest_path: str, target_slot_number: int, cloudlog, standalone=False,
+                       progress_cb: Callable[[int], None] | None = None) -> None:
   update = json.load(open(manifest_path))
 
   cloudlog.info(f"Target slot {target_slot_number}")
@@ -283,12 +293,17 @@ def flash_agnos_update(manifest_path: str, target_slot_number: int, cloudlog, st
   # set target slot as unbootable
   os.system(f"abctl --set_unbootable {target_slot_number}")
 
-  for partition in update:
+  num_partitions = len(update)
+  for idx, partition in enumerate(update):
     success = False
+
+    def partition_progress(p: int, idx: int = idx) -> None:
+      if progress_cb is not None:
+        progress_cb(int((idx + p / 100) / num_partitions * 100))
 
     for retries in range(10):
       try:
-        flash_partition(target_slot_number, partition, cloudlog, standalone)
+        flash_partition(target_slot_number, partition, cloudlog, standalone, progress_cb=partition_progress)
         success = True
         break
 
