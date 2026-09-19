@@ -28,6 +28,9 @@ function agnos_init {
     fi
     while true; do
       $DIR/openpilot/common/hardware/comma/updater $AGNOS_PY $MANIFEST
+      if $AGNOS_PY --swap $MANIFEST; then
+        sudo reboot
+      fi
     done
   fi
 }
