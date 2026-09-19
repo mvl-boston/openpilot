@@ -26,8 +26,15 @@ function agnos_init {
     if $AGNOS_PY --verify $MANIFEST; then
       sudo reboot
     fi
+    # Never fall through to manager on a mismatched AGNOS; keep the updater UI up until
+    # it has flashed and rebooted us (same as upstream #38672). The updater normally
+    # reboots the device itself, so reaching the headless fallback means the UI died;
+    # if we have network, flash and swap without it.
     while true; do
       $DIR/openpilot/common/hardware/comma/updater $AGNOS_PY $MANIFEST
+      if $AGNOS_PY --swap $MANIFEST; then
+        sudo reboot
+      fi
     done
   fi
 }

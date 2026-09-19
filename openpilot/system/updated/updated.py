@@ -50,6 +50,14 @@ def get_agnos_manifest_path(basedir: str) -> str:
       return manifest_path
   raise FileNotFoundError(f"no agnos.json found in {basedir}, tried: {AGNOS_MANIFEST_PATHS}")
 
+
+def agnos_version_tuple(version: str) -> tuple[int, ...]:
+  return tuple(int(part) for part in version.split("."))
+
+
+def is_agnos_downgrade(current: str, target: str) -> bool:
+  return agnos_version_tuple(target) < agnos_version_tuple(current)
+
 # do not allow to engage after this many hours onroad and this many routes
 HOURS_NO_CONNECTIVITY_MAX = 27
 ROUTES_NO_CONNECTIVITY_MAX = 84
@@ -222,6 +230,12 @@ def handle_agnos_update() -> None:
 
   cloudlog.info(f"AGNOS version check: {cur_version} vs {updated_version}")
   if cur_version == updated_version:
+    return
+
+  if is_agnos_downgrade(cur_version, updated_version):
+    cloudlog.info(
+      f"Deferring AGNOS downgrade {cur_version} -> {updated_version} until first boot on target branch"
+    )
     return
 
   # prevent an openpilot getting swapped in with a mismatched or partially downloaded agnos
