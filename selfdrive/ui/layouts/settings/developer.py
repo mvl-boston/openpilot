@@ -97,7 +97,7 @@ class DeveloperLayout(Widget):
       description=lambda: tr(DESCRIPTIONS["alpha_longitudinal"]),
       initial_state=self._params.get_bool("AlphaLongitudinalEnabled"),
       callback=self._on_alpha_long_enabled,
-      enabled=lambda: not ui_state.engaged,
+      enabled=True,
     )
 
     self._ui_debug_toggle = toggle_item(
@@ -155,8 +155,8 @@ class DeveloperLayout(Widget):
       self._lane_centering_e2e_authority_setting,
     ], line_separator=True, spacing=0)
 
-    # Toggles should be not available to change in onroad state
     ui_state.add_offroad_transition_callback(self._update_toggles)
+    ui_state.add_engaged_transition_callback(self._update_toggles)
 
   def _render(self, rect):
     self._scroller.render(rect)

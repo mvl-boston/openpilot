@@ -126,7 +126,7 @@ class DeveloperLayoutMici(NavScroller):
     )
     onroad_blocked_toggles = (self._adb_toggle, self._joystick_toggle)
     release_blocked_toggles = (self._joystick_toggle, self._long_maneuver_toggle, self._lat_maneuver_toggle, self._alpha_long_toggle)
-    engaged_blocked_toggles = (self._long_maneuver_toggle, self._lat_maneuver_toggle, self._alpha_long_toggle)
+    engaged_blocked_toggles = (self._long_maneuver_toggle, self._lat_maneuver_toggle)
 
     # Hide non-release toggles on release builds
     for item in release_blocked_toggles:
@@ -146,6 +146,7 @@ class DeveloperLayoutMici(NavScroller):
       gui_app.set_show_fps(True)
 
     ui_state.add_offroad_transition_callback(self._update_toggles)
+    ui_state.add_engaged_transition_callback(self._update_toggles)
 
   def _update_state(self):
     super()._update_state()
