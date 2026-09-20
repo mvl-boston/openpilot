@@ -18,6 +18,14 @@ from openpilot.system.ui.widgets.scroller import NavScroller
 UPDATER_TIMEOUT = 10.0  # seconds to wait for updater to respond
 
 
+def _updater_sub_label(updater_state: str) -> str:
+  if updater_state == "downloading...":
+    progress = ui_state.params.get("UpdaterProgress")
+    if progress is not None:
+      return f"downloading...\n{int(progress)}%"
+  return updater_state
+
+
 def _split_description(desc: str) -> tuple[str, str, str, str] | None:
   # UpdaterCurrentDescription/UpdaterNewDescription format: "version / branch / commit / date"
   parts = [p.strip() for p in desc.split(" / ")]
@@ -157,8 +165,9 @@ class CheckUpdateButton(BigButton):
         self._state = UpdaterState.IDLE
         self._hide_value_t = rl.get_time()
       else:
-        if self.get_value() != updater_state:
-          self.set_value(updater_state)
+        display = _updater_sub_label(updater_state)
+        if self.get_value() != display:
+          self.set_value(display)
 
     elif self._state == UpdaterState.IDLE:
       self.set_rotate_icon(False)
