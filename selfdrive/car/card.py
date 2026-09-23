@@ -152,9 +152,16 @@ class Car:
 
     self.is_metric = self.params.get_bool("IsMetric")
     self.experimental_mode = self.params.get_bool("ExperimentalMode")
+    self._alpha_long_enabled_prev = self.params.get_bool("AlphaLongitudinalEnabled")
 
     # card is driven by can recv, expected at 100Hz
     self.rk = Ratekeeper(100, print_delay_threshold=None)
+
+  def _reinit_stock_longitudinal(self) -> None:
+    if not self.CP.alphaLongitudinalAvailable:
+      return
+    cloudlog.warning("Re-enabling stock longitudinal ECUs after alpha long disabled")
+    self.CI.deinit(self.CP, *self.can_callbacks)
 
   def state_update(self) -> tuple[car.CarState, structs.RadarDataT | None]:
     """carState update loop, driven by can"""
@@ -226,9 +233,17 @@ class Car:
     if not self.initialized_prev:
       # Initialize CarInterface, once controls are ready
       # TODO: this can make us miss at least a few cycles when doing an ECU knockout
+      if self.CP.alphaLongitudinalAvailable and not self.params.get_bool("AlphaLongitudinalEnabled"):
+        self._reinit_stock_longitudinal()
       self.CI.init(self.CP, *self.can_callbacks)
       # signal pandad to switch to car safety mode
       self.params.put_bool("ControlsReady", True)
+
+    alpha_long = self.params.get_bool("AlphaLongitudinalEnabled")
+    if alpha_long != self._alpha_long_enabled_prev:
+      if self._alpha_long_enabled_prev and not alpha_long:
+        self._reinit_stock_longitudinal()
+      self._alpha_long_enabled_prev = alpha_long
 
     if self.sm.all_alive(['carControl']):
       # send car controls over can
@@ -269,6 +284,11 @@ class Car:
     finally:
       e.set()
       t.join()
+      try:
+        if self.CP.alphaLongitudinalAvailable and not self.params.get_bool("AlphaLongitudinalEnabled"):
+          self._reinit_stock_longitudinal()
+      except Exception:
+        cloudlog.exception("alpha long deinit on card shutdown failed")
 
 
 def main():
