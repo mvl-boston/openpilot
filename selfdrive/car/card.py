@@ -152,16 +152,9 @@ class Car:
 
     self.is_metric = self.params.get_bool("IsMetric")
     self.experimental_mode = self.params.get_bool("ExperimentalMode")
-    self._alpha_long_enabled_prev = self.params.get_bool("AlphaLongitudinalEnabled")
 
     # card is driven by can recv, expected at 100Hz
     self.rk = Ratekeeper(100, print_delay_threshold=None)
-
-  def _deinit_longitudinal_ecus(self, reason: str) -> None:
-    if not self.CP.alphaLongitudinalAvailable:
-      return
-    cloudlog.warning(f"CarInterface.deinit ({reason})")
-    self.CI.deinit(self.CP, *self.can_callbacks)
 
   def state_update(self) -> tuple[car.CarState, structs.RadarDataT | None]:
     """carState update loop, driven by can"""
@@ -233,17 +226,9 @@ class Car:
     if not self.initialized_prev:
       # Initialize CarInterface, once controls are ready
       # TODO: this can make us miss at least a few cycles when doing an ECU knockout
-      if self.CP.alphaLongitudinalAvailable and not self.params.get_bool("AlphaLongitudinalEnabled"):
-        self._deinit_longitudinal_ecus("alpha long off at card init")
       self.CI.init(self.CP, *self.can_callbacks)
       # signal pandad to switch to car safety mode
       self.params.put_bool("ControlsReady", True)
-
-    alpha_long = self.params.get_bool("AlphaLongitudinalEnabled")
-    if alpha_long != self._alpha_long_enabled_prev:
-      if self._alpha_long_enabled_prev and not alpha_long:
-        self._deinit_longitudinal_ecus("alpha long toggled off")
-      self._alpha_long_enabled_prev = alpha_long
 
     if self.sm.all_alive(['carControl']):
       # send car controls over can
@@ -284,12 +269,6 @@ class Car:
     finally:
       e.set()
       t.join()
-      try:
-        # Always re-enable stock long ECUs on shutdown (e.g. alpha still on at key-off or comma removed).
-        if self.CP.alphaLongitudinalAvailable:
-          self._deinit_longitudinal_ecus("card shutdown")
-      except Exception:
-        cloudlog.exception("CarInterface.deinit on card shutdown failed")
 
 
 def main():
