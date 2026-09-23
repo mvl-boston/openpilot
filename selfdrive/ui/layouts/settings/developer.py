@@ -170,7 +170,7 @@ class DeveloperLayout(Widget):
     ui_state.update_params()
 
     # Hide non-release toggles on release builds
-    # TODO: we can do an onroad cycle, but alpha long toggle requires a deinit function to re-enable radar and not fault
+    # Alpha long offroad cycle re-enables the Bosch radar via card CarInterface.deinit (see selfdrive/car/card.py).
     for item in (self._joystick_toggle, self._long_maneuver_toggle, self._lat_maneuver_toggle, self._alpha_long_toggle):
       item.set_visible(not self._is_release)
 
