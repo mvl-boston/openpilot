@@ -9,13 +9,11 @@
 #include <QPainter>
 
 #include "common/yuv.h"
+#include "tools/cabana/utils/util.h"
 
 CameraWidget::CameraWidget(std::string stream_name, VisionStreamType type, QWidget* parent) :
                           stream_name(stream_name), active_stream_type(type), requested_stream_type(type), QWidget(parent) {
   setAttribute(Qt::WA_OpaquePaintEvent);
-  qRegisterMetaType<std::set<VisionStreamType>>("availableStreams");
-  QObject::connect(this, &CameraWidget::vipcThreadFrameReceived, this, &CameraWidget::vipcFrameReceived, Qt::QueuedConnection);
-  QObject::connect(this, &CameraWidget::vipcAvailableStreamsUpdated, this, &CameraWidget::availableStreamsUpdated, Qt::QueuedConnection);
   QObject::connect(QApplication::instance(), &QCoreApplication::aboutToQuit, this, &CameraWidget::stopVipcThread);
 }
 
@@ -38,10 +36,6 @@ void CameraWidget::stopVipcThread() {
   }
 }
 
-void CameraWidget::availableStreamsUpdated(std::set<VisionStreamType> streams) {
-  available_streams = streams;
-}
-
 void CameraWidget::paintEvent(QPaintEvent *event) {
   QPainter p(this);
   p.fillRect(rect(), bg);
@@ -57,18 +51,14 @@ void CameraWidget::paintEvent(QPaintEvent *event) {
   QRect video_rect((width() - w) / 2, (height() - h) / 2, w, h);
 
   p.setRenderHint(QPainter::SmoothPixmapTransform);
-  if (active_stream_type == VISION_STREAM_DRIVER) {
-    // mirror driver camera horizontally
+  if (active_stream_type == VISION_STREAM_CABIN) {
+    // mirror cabin camera horizontally
     const qreal cx = video_rect.x() + video_rect.width() / 2.0;
     p.translate(cx, 0);
     p.scale(-1, 1);
     p.translate(-cx, 0);
   }
   p.drawImage(video_rect, rgb_frame);
-}
-
-void CameraWidget::vipcFrameReceived() {
-  update();
 }
 
 void CameraWidget::vipcThread() {
@@ -93,7 +83,11 @@ void CameraWidget::vipcThread() {
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
         continue;
       }
-      emit vipcAvailableStreamsUpdated(streams);
+      utils::runOnMainThread([this, alive = std::weak_ptr<bool>(alive_), streams]() {
+        if (alive.expired()) return;
+        available_streams = streams;
+        availableStreamsUpdated(streams);
+      });
 
       if (!vipc_client->connect(false)) {
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -112,7 +106,9 @@ void CameraWidget::vipcThread() {
         std::lock_guard lk(frame_lock);
         rgb_frame.swap(rgb_back);
       }
-      emit vipcThreadFrameReceived();
+      utils::runOnMainThread([this, alive = std::weak_ptr<bool>(alive_)]() {
+        if (!alive.expired()) update();
+      });
     }
   }
 }
