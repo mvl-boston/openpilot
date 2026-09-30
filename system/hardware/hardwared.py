@@ -3,7 +3,6 @@ import fcntl
 import os
 import queue
 import struct
-import subprocess
 import threading
 import time
 from collections import OrderedDict, namedtuple
