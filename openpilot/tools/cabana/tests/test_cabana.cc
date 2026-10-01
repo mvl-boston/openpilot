@@ -1,20 +1,18 @@
 
-#undef INFO
+#include <cstdlib>
+#include <ctime>
 #include <filesystem>
 #include <sstream>
 
-#include "catch2/catch.hpp"
+#include "common/tests/native_test.h"
 #include "tools/cabana/dbc/dbcfile.h"
 #include "tools/cabana/dbc/dbcmanager.h"
-#include "tools/cabana/core/settings.h"
-
-#ifdef QT_CORE_LIB
-#include <QColor>
-#endif
+#include "tools/cabana/routes.h"
+#include "tools/cabana/utils/strings.h"
 
 const std::string TEST_RLOG_URL = "https://commadataci.blob.core.windows.net/openpilotci/0c94aa1e1296d7c6/2021-05-05--19-48-37/0/rlog.bz2";
 
-TEST_CASE("DBCFile::generateDBC") {
+void test_generate_dbc() {
   std::string fn = std::string(OPENDBC_FILE_PATH) + "/tesla_can.dbc";
   DBCFile dbc_origin(fn);
   DBCFile dbc_from_generated("", dbc_origin.generateDBC());
@@ -35,7 +33,7 @@ TEST_CASE("DBCFile::generateDBC") {
   }
 }
 
-TEST_CASE("DBCFile::generateDBC - comment order") {
+void test_comment_order() {
   // Ensure that message comments are followed by signal comments and in the correct order
   std::string content = R"(BO_ 160 message_1: 8 EON
  SG_ signal_1 : 0|12@1+ (1,0) [0|4095] "unit" XXX
@@ -52,7 +50,7 @@ CM_ SG_ 162 signal_2 "signal comment";
   REQUIRE(dbc.generateDBC() == content);
 }
 
-TEST_CASE("DBCFile::generateDBC -- preserve original header") {
+void test_preserve_original_header() {
   std::string content = R"(VERSION "1.0"
 
 NS_ :
@@ -72,7 +70,7 @@ CM_ SG_ 160 signal_1 "signal comment";
   REQUIRE(dbc.generateDBC() == content);
 }
 
-TEST_CASE("DBCFile::generateDBC - escaped quotes") {
+void test_escaped_quotes() {
   std::string content = R"(BO_ 160 message_1: 8 EON
  SG_ signal_1 : 0|12@1+ (1,0) [0|4095] "unit" XXX
 
@@ -83,7 +81,7 @@ CM_ SG_ 160 signal_1 "signal comment with \"escaped quotes\"";
   REQUIRE(dbc.generateDBC() == content);
 }
 
-TEST_CASE("parse_dbc") {
+void test_parse_dbc() {
   std::string content = R"(
 BO_ 160 message_1: 8 EON
   SG_ signal_1 : 0|12@1+ (1,0) [0|4095] "unit"  XXX
@@ -149,7 +147,7 @@ CM_ SG_ 162 signal_1 "signal comment with \"escaped quotes\"";
   REQUIRE(msg->sigs[0]->comment == "signal comment with \"escaped quotes\"");
 }
 
-TEST_CASE("parse_opendbc") {
+void test_parse_opendbc() {
   std::vector<std::string> errors;
   for (const auto &entry : std::filesystem::directory_iterator(OPENDBC_FILE_PATH)) {
     if (!entry.is_regular_file() || entry.path().extension() != ".dbc") continue;
@@ -161,20 +159,19 @@ TEST_CASE("parse_opendbc") {
   }
   std::ostringstream details;
   for (const auto &error : errors) details << error << '\n';
-  INFO(details.str());
+  if (!errors.empty()) std::cerr << details.str();
   REQUIRE(errors.empty());
 }
 
-TEST_CASE("DBCManager core callbacks") {
+void test_dbc_manager() {
   DBCManager manager;
   int files_changed = 0;
   int signals_added = 0;
   int masks_updated = 0;
-  manager.setCallbacks({
-    .signal_added = [&](MessageId, const cabana::Signal *) { ++signals_added; },
-    .file_changed = [&]() { ++files_changed; },
-    .mask_updated = [&]() { ++masks_updated; },
-  });
+  Connections connections;
+  connections.push_back(manager.signalAdded.connect([&](MessageId, const cabana::Signal *) { ++signals_added; }));
+  connections.push_back(manager.fileChanged.connect([&]() { ++files_changed; }));
+  connections.push_back(manager.maskUpdated.connect([&]() { ++masks_updated; }));
 
   std::string error;
   REQUIRE(manager.open(SOURCE_ALL, "test", "BO_ 160 message: 8 XXX\n", &error));
@@ -192,34 +189,132 @@ TEST_CASE("DBCManager core callbacks") {
   REQUIRE(manager.msg({.source = 0, .address = 160})->sig("speed") != nullptr);
 }
 
-TEST_CASE("Cabana settings core defaults") {
-  CabanaSettingsState state;
-  REQUIRE(state.fps == 10);
-  REQUIRE(state.chart_range == 180);
-  REQUIRE(state.drag_direction == CabanaSettingsState::MsbFirst);
-  REQUIRE(state.recent_files.empty());
-}
+void test_format_seconds() {
+  REQUIRE(utils::formatSeconds(0) == "00:00");
+  REQUIRE(utils::formatSeconds(59.4) == "00:59");
+  REQUIRE(utils::formatSeconds(-1) == "00:00");
+  REQUIRE(utils::formatSeconds(61.234, true) == "01:01.234");
+  REQUIRE(utils::formatSeconds(3599.9) == "59:59");
+  REQUIRE(utils::formatSeconds(3601) == "01:00:01");
+  REQUIRE(utils::formatSeconds(3601.5, true) == "01:00:01.500");
 
-#ifdef QT_CORE_LIB
-TEST_CASE("CabanaColor preserves QColor transformations") {
-  const std::vector<QColor> colors = {
-    QColor(102, 86, 169, 64), QColor(0, 187, 255, 128), QColor(255, 0, 0, 128), QColor(45, 120, 75, 255),
-  };
-  for (const auto &qt_color : colors) {
-    CabanaColor color(qt_color.red(), qt_color.green(), qt_color.blue(), qt_color.alpha());
-    for (int factor : {75, 100, 135, 150, 200}) {
-      const auto lighter = color.lighter(factor);
-      const auto qt_lighter = qt_color.lighter(factor);
-      CHECK(std::abs(lighter.red() - qt_lighter.red()) <= 1);
-      CHECK(std::abs(lighter.green() - qt_lighter.green()) <= 1);
-      CHECK(std::abs(lighter.blue() - qt_lighter.blue()) <= 1);
-
-      const auto darker = color.darker(factor);
-      const auto qt_darker = qt_color.darker(factor);
-      CHECK(std::abs(darker.red() - qt_darker.red()) <= 1);
-      CHECK(std::abs(darker.green() - qt_darker.green()) <= 1);
-      CHECK(std::abs(darker.blue() - qt_darker.blue()) <= 1);
-    }
+  const char *tz = getenv("TZ");
+  const bool had_tz = tz != nullptr;
+  const std::string saved_tz = had_tz ? tz : "";
+  setenv("TZ", "UTC", 1);
+  tzset();
+  REQUIRE(utils::formatSeconds(0, false, true) == "1970-01-01 00:00:00");
+  REQUIRE(utils::formatSeconds(1700000000.123, true, true) == "2023-11-14 22:13:20.123");
+  if (had_tz) {
+    setenv("TZ", saved_tz.c_str(), 1);
+  } else {
+    unsetenv("TZ");
   }
+  tzset();
 }
-#endif
+
+void test_to_hex() {
+  REQUIRE(utils::toHex({}) == "");
+  REQUIRE(utils::toHex({0x00, 0x0f, 0xab, 0xff}) == "000FABFF");
+  REQUIRE(utils::toHex({0x01, 0x02, 0x03}, ' ') == "01 02 03");
+
+  REQUIRE(utils::toHexString(0) == "0x00");
+  REQUIRE(utils::toHexString(0xf) == "0x0F");
+  REQUIRE(utils::toHexString(0x1ab) == "0x1AB");
+  REQUIRE(utils::toHexString(0x1fffffff) == "0x1FFFFFFF");
+}
+
+void test_signal_tooltip() {
+  cabana::Signal sig{};
+  sig.name = "speed";
+  sig.start_bit = 3;
+  sig.size = 12;
+  sig.msb = 14;
+  sig.lsb = 3;
+  sig.is_little_endian = true;
+  sig.is_signed = false;
+  REQUIRE(utils::signalToolTip(&sig) == R"(
+    speed<br /><span font-size:small">
+    Start Bit: 3 Size: 12<br />
+    MSB: 14 LSB: 3<br />
+    Little Endian: Y Signed: N</span>
+  )");
+}
+
+void test_route_timestamps() {
+  REQUIRE(routes::parseIsoToUnixMs("2024-01-02T03:04:05Z") == 1704164645000);
+  REQUIRE(routes::parseIsoToUnixMs("2024-01-02T03:04:05") == 1704164645000);
+  REQUIRE(routes::parseIsoToUnixMs("2024-01-02 03:04:05") == 1704164645000);
+  REQUIRE(routes::parseIsoToUnixMs("2024-01-02T03:04:05.123Z") == 1704164645123);
+  REQUIRE(routes::parseIsoToUnixMs("2024-01-02T03:04:05.4Z") == 1704164645400);
+  REQUIRE(routes::parseIsoToUnixMs("2024-01-02T03:04:05.123456Z") == 1704164645123);
+  REQUIRE(routes::parseIsoToUnixMs("") == 0);
+  REQUIRE(routes::parseIsoToUnixMs("not a timestamp") == 0);
+
+  // formatUnixMs is local time
+  const char *tz = getenv("TZ");
+  const std::string prev_tz = tz ? tz : "";
+  setenv("TZ", "UTC", 1);
+  tzset();
+  REQUIRE(routes::formatUnixMs(1704164645123) == "2024-01-02 03:04:05");
+  if (tz) {
+    setenv("TZ", prev_tz.c_str(), 1);
+  } else {
+    unsetenv("TZ");
+  }
+  tzset();
+}
+
+void test_route_api_response() {
+  REQUIRE(routes::checkApiResponse("") == std::make_pair(false, 500));
+  REQUIRE(routes::checkApiResponse("not json") == std::make_pair(false, 500));
+  REQUIRE(routes::checkApiResponse(R"({"error": "unauthorized"})") == std::make_pair(false, 401));
+  REQUIRE(routes::checkApiResponse(R"({"error": "server error"})") == std::make_pair(false, 500));
+  REQUIRE(routes::checkApiResponse("[]") == std::make_pair(true, 0));
+  REQUIRE(routes::checkApiResponse(R"({"dongle_id": "aaaa"})") == std::make_pair(true, 0));
+}
+
+void test_route_json() {
+  auto devices = routes::parseDevices(R"([{"dongle_id": "aaaa"}, {"dongle_id": "bbbb"}])");
+  REQUIRE(devices.size() == 2);
+  REQUIRE(devices[0].dongle_id == "aaaa");
+  REQUIRE(devices[1].dongle_id == "bbbb");
+  REQUIRE(routes::parseDevices("not json").empty());
+  REQUIRE(routes::parseDevices(R"({"error": "unauthorized"})").empty());
+
+  auto list = routes::parseRoutes(
+      R"([{"fullname": "aaaa|2024-01-02--03-04-05", "start_time_utc_millis": 1704164645000, "end_time_utc_millis": 1704165245000}])", false);
+  REQUIRE(list.size() == 1);
+  REQUIRE(list[0].name == "aaaa|2024-01-02--03-04-05");
+  REQUIRE(list[0].start_ms == 1704164645000);
+  REQUIRE(list[0].end_ms == 1704165245000);
+
+  // preserved routes report ISO-8601 timestamps
+  auto preserved = routes::parseRoutes(
+      R"([{"fullname": "aaaa|2024-01-02--03-04-05", "start_time": "2024-01-02T03:04:05Z", "end_time": "2024-01-02T03:14:05Z"}])", true);
+  REQUIRE(preserved.size() == 1);
+  REQUIRE(preserved[0].start_ms == 1704164645000);
+  REQUIRE(preserved[0].end_ms == 1704165245000);
+
+  REQUIRE(routes::parseRoutes("not json", false).empty());
+}
+
+void test_cabana_core() {
+  test_format_seconds();
+  test_to_hex();
+  test_signal_tooltip();
+  test_generate_dbc();
+  test_comment_order();
+  test_preserve_original_header();
+  test_escaped_quotes();
+  test_parse_dbc();
+  test_parse_opendbc();
+  test_dbc_manager();
+  test_route_timestamps();
+  test_route_api_response();
+  test_route_json();
+}
+
+int main() {
+  return run_native_test(test_cabana_core);
+}
