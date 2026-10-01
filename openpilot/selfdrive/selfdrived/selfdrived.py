@@ -53,6 +53,7 @@ MonitoringPolicy = log.DriverMonitoringState.MonitoringPolicy
 TurnDirection = custom.ModelDataV2SP.TurnDirection
 
 IGNORED_SAFETY_MODES = (SafetyModel.silent, SafetyModel.noOutput)
+HOUSEKEEPING_TIMEOUT = 20.  # s, deviceState/managerState staleness before commIssue (default alive window is 5 s)
 
 
 class SelfdriveD(CruiseHelper):
@@ -104,13 +105,20 @@ class SelfdriveD(CruiseHelper):
     if REPLAY:
       # no vipc in replay will make them ignored anyways
       ignore += ['narrowRoadCameraState', 'wideRoadCameraState']
+    # deviceState and managerState are 2 Hz housekeeping publishers whose loops block on
+    # synchronous /data/params writes (fsync). A storage stall of a few seconds silences both
+    # (route b29245576c122ee6/44: 7.7 s deviceState gap mid-drive, nothing on the control path
+    # affected) and the default 5 s alive window turned that into a soft disable. They get a
+    # longer staleness window below instead of the generic check.
+    self.housekeeping_packets = ['deviceState', 'managerState']
+    ignore_housekeeping = ignore + self.housekeeping_packets
     self.sm = messaging.SubMaster(['deviceState', 'pandaStates', 'peripheralState', 'modelV2', 'extrinsicsCalibration',
                                    'carOutput', 'driverMonitoringState', 'longitudinalPlan', 'deviceMotion', 'lateralDelay',
                                    'managerState', 'vehicleParameters', 'radarState', 'lateralTorqueParameters',
                                    'controlsState', 'carControl', 'driverAssistance', 'alertDebug', 'userBookmark',
                                    'lateralManeuverPlan', 'modelDataV2SP', 'longitudinalPlanSP'] + \
                                    self.camera_packets + self.sensor_packets + self.gps_packets,
-                                  ignore_alive=ignore, ignore_avg_freq=ignore,
+                                  ignore_alive=ignore_housekeeping, ignore_avg_freq=ignore_housekeeping,
                                   ignore_valid=ignore, frequency=int(1/DT_CTRL))
 
     # read params
@@ -155,10 +163,6 @@ class SelfdriveD(CruiseHelper):
     self.rk = Ratekeeper(100, print_delay_threshold=None)
 
     self.ignored_processes = {'mapd', }
-    # Defer commIssue until messaging has been healthy once (or startup grace expires).
-    # selfdrived can initialize on the 6 s timeout while model/planner sockets are still
-    # spinning up; firing commIssue immediately after that reads as "exit ACC" on engage.
-    self.comm_ready = False
 
     # Determine startup event
     is_remote = build_metadata.openpilot.comma_remote or build_metadata.openpilot.sunnypilot_remote
@@ -420,6 +424,10 @@ class SelfdriveD(CruiseHelper):
           self.events.add(EventName.cameraFrameRate)
     if not REPLAY and self.rk.lagging:
       self.events.add(EventName.selfdrivedLagging)
+    # housekeeping publishers: tolerate a storage stall, still alert on a dead process
+    if not SIMULATION and any(self.sm.seen[s] and (self.sm.frame - self.sm.recv_frame[s]) * DT_CTRL > HOUSEKEEPING_TIMEOUT
+                              for s in self.housekeeping_packets):
+      self.events.add(EventName.commIssue)
     if self.CP.openpilotLongitudinalControl:
       if self.sm['radarState'].radarErrors.canError:
         self.events.add(EventName.canError)
@@ -437,11 +445,7 @@ class SelfdriveD(CruiseHelper):
     no_system_errors = (not has_disable_events) or (len(self.events) == num_events)
     warmup_sec = 5.
     big_model_settling = self.big_model_loading or time.monotonic() < self.big_model_ready_t + warmup_sec
-    if self.sm.all_checks():
-      self.comm_ready = True
-    elif self.initialized and (self.sm.frame * DT_CTRL > 30.):
-      self.comm_ready = True
-    if not self.sm.all_checks() and no_system_errors and not big_model_settling and self.comm_ready:  # the load holds modelV2 and friends back on purpose
+    if not self.sm.all_checks() and no_system_errors and not big_model_settling:  # the load holds modelV2 and friends back on purpose
       if not self.sm.all_alive():
         self.events.add(EventName.commIssue)
       elif not self.sm.all_freq_ok():
