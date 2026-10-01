@@ -155,6 +155,10 @@ class SelfdriveD(CruiseHelper):
     self.rk = Ratekeeper(100, print_delay_threshold=None)
 
     self.ignored_processes = {'mapd', }
+    # Defer commIssue until messaging has been healthy once (or startup grace expires).
+    # selfdrived can initialize on the 6 s timeout while model/planner sockets are still
+    # spinning up; firing commIssue immediately after that reads as "exit ACC" on engage.
+    self.comm_ready = False
 
     # Determine startup event
     is_remote = build_metadata.openpilot.comma_remote or build_metadata.openpilot.sunnypilot_remote
@@ -433,7 +437,11 @@ class SelfdriveD(CruiseHelper):
     no_system_errors = (not has_disable_events) or (len(self.events) == num_events)
     warmup_sec = 5.
     big_model_settling = self.big_model_loading or time.monotonic() < self.big_model_ready_t + warmup_sec
-    if not self.sm.all_checks() and no_system_errors and not big_model_settling:  # the load holds modelV2 and friends back on purpose
+    if self.sm.all_checks():
+      self.comm_ready = True
+    elif self.initialized and (self.sm.frame * DT_CTRL > 30.):
+      self.comm_ready = True
+    if not self.sm.all_checks() and no_system_errors and not big_model_settling and self.comm_ready:  # the load holds modelV2 and friends back on purpose
       if not self.sm.all_alive():
         self.events.add(EventName.commIssue)
       elif not self.sm.all_freq_ok():
