@@ -6,6 +6,17 @@ icon: vehicle
 order: 99
 kind: vehicle
 sections:
+- id: honda
+  title: Honda / Acura Settings
+  description: ''
+  items:
+  - key: HondaEnforceStockLongitudinal
+    widget: toggle
+    needs_onroad_cycle: true
+    title: 'Honda Nidec: Enforce Factory Longitudinal Control'
+    description: sunnypilot will not take over control of gas and brakes. Factory Honda Nidec longitudinal control will be used.
+    enablement:
+    - $ref: '#/macros/not_engaged'
 - id: hyundai
   title: Hyundai / Kia / Genesis Settings
   description: ''

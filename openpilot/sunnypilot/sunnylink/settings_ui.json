@@ -324,6 +324,32 @@
               },
               "items": [
                 {
+                  "key": "LateralJerkTorqueController",
+                  "widget": "toggle",
+                  "title": "Lateral Jerk Torque Controller",
+                  "description": "Looks ahead at planned steering to reduce sudden corrections, so the wheel moves more smoothly through turns. Works with Self-Tune and custom tuning. Thanks to @twilsonco for the implementation.",
+                  "visibility": [
+                    {
+                      "type": "not",
+                      "condition": {
+                        "type": "capability",
+                        "field": "steer_control_type",
+                        "equals": "angle"
+                      }
+                    }
+                  ],
+                  "enablement": [
+                    {
+                      "type": "offroad_only"
+                    },
+                    {
+                      "type": "param",
+                      "key": "NeuralNetworkLateralControl",
+                      "equals": false
+                    }
+                  ]
+                },
+                {
                   "key": "LiveTorqueParamsToggle",
                   "widget": "toggle",
                   "title": "Self-Tune",
@@ -518,6 +544,12 @@
                   "label": "3 seconds"
                 }
               ]
+            },
+            {
+              "key": "RoadEdgeLaneChangeEnabled",
+              "widget": "toggle",
+              "title": "Block Lane Change: Road Edge Detection",
+              "description": "Blocks lane change when the model sees a road edge on the side you signal."
             },
             {
               "key": "AutoLaneChangeBsmDelay",
@@ -1260,6 +1292,67 @@
                   "label": "2 m"
                 }
               ]
+            },
+            {
+              "key": "ScreenSaverEnabled",
+              "widget": "toggle",
+              "title": "Screen Saver",
+              "description": "Show a screen saver when the device is offroad and idle, instead of turning the screen off."
+            },
+            {
+              "key": "ScreenSaverTimeout",
+              "widget": "multiple_button",
+              "title": "Screen Saver Duration",
+              "description": "How long the screen saver runs before the screen turns off.",
+              "options": [
+                {
+                  "value": 60,
+                  "label": "1 m"
+                },
+                {
+                  "value": 120,
+                  "label": "2 m"
+                },
+                {
+                  "value": 180,
+                  "label": "3 m"
+                },
+                {
+                  "value": 240,
+                  "label": "4 m"
+                },
+                {
+                  "value": 300,
+                  "label": "5 m"
+                },
+                {
+                  "value": 360,
+                  "label": "6 m"
+                },
+                {
+                  "value": 420,
+                  "label": "7 m"
+                },
+                {
+                  "value": 480,
+                  "label": "8 m"
+                },
+                {
+                  "value": 540,
+                  "label": "9 m"
+                },
+                {
+                  "value": 600,
+                  "label": "10 m"
+                }
+              ],
+              "enablement": [
+                {
+                  "type": "param",
+                  "key": "ScreenSaverEnabled",
+                  "equals": true
+                }
+              ]
             }
           ]
         }
@@ -1925,6 +2018,65 @@
               ]
             }
           ]
+        },
+        {
+          "id": "lane_centering",
+          "title": "StarPilot Lane Centering (SPLC)",
+          "description": "Experimental confidence-gated lane centering ported from StarPilot. Biases the model command toward the detected lane center while remaining subject to normal curvature and jerk limits.",
+          "items": [
+            {
+              "key": "LaneCentering",
+              "widget": "toggle",
+              "title": "SPLC (StarPilot Lane Centering)",
+              "description": "Experimentally bias the model command toward the detected lane center. Requires two confident lane lines and remains subject to normal curvature and jerk limits."
+            },
+            {
+              "key": "LaneCenteringPauseOnSignal",
+              "widget": "toggle",
+              "title": "SPLC Pause on Turn Signal",
+              "description": "Fade the lane-centering correction out when a turn signal is active so it does not fight a lane change or turn.",
+              "enablement": [
+                {
+                  "type": "param",
+                  "key": "LaneCentering",
+                  "equals": true
+                }
+              ]
+            },
+            {
+              "key": "LaneCenterOffset",
+              "widget": "option",
+              "title": "SPLC Center Offset",
+              "description": "Shift the lane-centering target left or right of the lane center. The controller automatically reduces the offset when the detected lane is narrow.",
+              "min": -0.3,
+              "max": 0.3,
+              "step": 0.01,
+              "unit": "meters",
+              "enablement": [
+                {
+                  "type": "param",
+                  "key": "LaneCentering",
+                  "equals": true
+                }
+              ]
+            },
+            {
+              "key": "LaneCenteringE2EAuthority",
+              "widget": "option",
+              "title": "SPLC E2E Override",
+              "description": "How strongly a confident end-to-end model path can override lane centering when it deliberately departs the lane center. 1.0 gives the model full authority; 0.0 disables break-in.",
+              "min": 0.0,
+              "max": 1.0,
+              "step": 0.05,
+              "enablement": [
+                {
+                  "type": "param",
+                  "key": "LaneCentering",
+                  "equals": true
+                }
+              ]
+            }
+          ]
         }
       ]
     },
@@ -2037,6 +2189,11 @@
                   "type": "param",
                   "key": "EnforceTorqueControl",
                   "equals": false
+                },
+                {
+                  "type": "param",
+                  "key": "LateralJerkTorqueController",
+                  "equals": false
                 }
               ]
             }
@@ -2070,6 +2227,24 @@
     }
   ],
   "vehicle_settings": {
+    "honda": {
+      "title": "Honda / Acura Settings",
+      "description": "",
+      "items": [
+        {
+          "key": "HondaEnforceStockLongitudinal",
+          "widget": "toggle",
+          "needs_onroad_cycle": true,
+          "title": "Honda Nidec: Enforce Factory Longitudinal Control",
+          "description": "sunnypilot will not take over control of gas and brakes. Factory Honda Nidec longitudinal control will be used.",
+          "enablement": [
+            {
+              "type": "not_engaged"
+            }
+          ]
+        }
+      ]
+    },
     "hyundai": {
       "title": "Hyundai / Kia / Genesis Settings",
       "description": "",
