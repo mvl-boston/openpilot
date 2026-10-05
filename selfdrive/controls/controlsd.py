@@ -12,6 +12,7 @@ from openpilot.common.swaglog import cloudlog
 from opendbc.car.car_helpers import interfaces
 from opendbc.car.vehicle_model import VehicleModel
 from openpilot.selfdrive.controls.lib.drive_helpers import clip_curvature
+from openpilot.selfdrive.controls.lib.lane_centering import LaneCenteringController
 from openpilot.selfdrive.controls.lib.latcontrol import LatControl
 from openpilot.selfdrive.controls.lib.latcontrol_pid import LatControlPID
 from openpilot.selfdrive.controls.lib.latcontrol_angle import LatControlAngle, STEER_ANGLE_SATURATION_THRESHOLD
@@ -45,6 +46,9 @@ class Controls:
     self.curvature = 0.0
     self.desired_curvature = 0.0
 
+    self.lane_centering = LaneCenteringController()
+    self.update_lane_centering_params()
+
     self.pose_calibrator = PoseCalibrator()
     self.calibrated_pose: Pose | None = None
 
@@ -58,8 +62,19 @@ class Controls:
     elif self.CP.lateralTuning.which() == 'torque':
       self.LaC = LatControlTorque(self.CP, self.CI, DT_CTRL)
 
+  def update_lane_centering_params(self):
+    self.lane_centering_enabled = self.params.get_bool("LaneCentering")
+    self.lane_centering_pause_on_signal = bool(self.params.get("LaneCenteringPauseOnSignal", return_default=True))
+    self.lane_centering_e2e_authority = float(self.params.get("LaneCenteringE2EAuthority", return_default=True))
+    self.lane_center_offset = float(self.params.get("LaneCenterOffset", return_default=True))
+
   def update(self):
     self.sm.update(15)
+
+    # refresh periodically so the developer menu toggles apply without a restart
+    if self.sm.frame % 100 == 0:
+      self.update_lane_centering_params()
+
     if self.sm.updated["liveCalibration"]:
       self.pose_calibrator.feed_live_calib(self.sm['liveCalibration'])
     if self.sm.updated["livePose"]:
@@ -107,6 +122,7 @@ class Controls:
 
     if not CC.latActive:
       self.LaC.reset()
+      self.lane_centering.reset()
     if not CC.longActive:
       self.LoC.reset()
 
@@ -120,6 +136,17 @@ class Controls:
       new_desired_curvature = self.sm['lateralManeuverPlan'].desiredCurvature if CC.latActive else self.curvature
     else:
       new_desired_curvature = model_v2.action.desiredCurvature if CC.latActive else self.curvature
+
+    new_desired_curvature = self.lane_centering.update(
+      new_desired_curvature, model_v2, CS.vEgo,
+      self.lane_centering_enabled,
+      self.lane_center_offset,
+      self.lane_centering_e2e_authority,
+      CC.latActive,
+      bool(self.sm.all_checks(['modelV2'])),
+      self.lane_centering_pause_on_signal,
+      bool(CS.leftBlinker or CS.rightBlinker))
+
     self.desired_curvature, curvature_limited = clip_curvature(CS.vEgo, self.desired_curvature, new_desired_curvature, lp.roll)
     lat_delay = self.sm["liveDelay"].lateralDelay + LAT_SMOOTH_SECONDS
 
