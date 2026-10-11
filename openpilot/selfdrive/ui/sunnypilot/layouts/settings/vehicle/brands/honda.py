@@ -33,12 +33,21 @@ class HondaSettings(BrandSettings):
 
     self.items = [self.enforce_stock_longitudinal, ]
 
+  def _request_onroad_cycle(self):
+    # Bosch (alphaLongitudinalAvailable): the CarController applies the change through an onroad cycle
+    # itself, after handing longitudinal control back to the stock radar; cycling from here first would
+    # stop card before the radar is transmitting again and latch a brake-module fault for the drive.
+    # Nidec has no radar to hand back and no controller-side handling, so the cycle is requested here.
+    if ui_state.CP is not None and ui_state.CP.alphaLongitudinalAvailable:
+      return
+    ui_state.params.put_bool("OnroadCycleRequested", True)
+
   def _on_enable_enforce_stock_longitudinal(self, state: bool):
     if state:
       def confirm_callback(result: int):
         if result == DialogResult.CONFIRM:
           ui_state.params.put_bool("HondaEnforceStockLongitudinal", True)
-          ui_state.params.put_bool("OnroadCycleRequested", True)
+          self._request_onroad_cycle()
         else:
           self.enforce_stock_longitudinal.action_item.set_state(False)
 
@@ -50,7 +59,7 @@ class HondaSettings(BrandSettings):
 
     else:
       ui_state.params.put_bool("HondaEnforceStockLongitudinal", False)
-      ui_state.params.put_bool("OnroadCycleRequested", True)
+      self._request_onroad_cycle()
 
   def update_settings(self):
     pass
