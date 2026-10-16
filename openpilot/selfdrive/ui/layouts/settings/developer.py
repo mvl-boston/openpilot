@@ -120,7 +120,6 @@ class DeveloperLayout(Widget):
     ui_state.update_params()
 
     # Hide non-release toggles on release builds
-    # TODO: we can do an onroad cycle, but alpha long toggle requires a deinit function to re-enable radar and not fault
     for item in (self._joystick_toggle, self._long_maneuver_toggle, self._lat_maneuver_toggle, self._alpha_long_toggle):
       item.set_visible(not self._is_release)
 
@@ -188,12 +187,21 @@ class DeveloperLayout(Widget):
     self._params.put_bool("LongitudinalManeuverMode", False, block=True)
     self._long_maneuver_toggle.action_item.set_state(False)
 
+  def _request_onroad_cycle(self):
+    # The toggle takes effect through an onroad cycle (CarParams is fixed for the drive). On Honda the
+    # CarController requests the cycle itself, after it has handed longitudinal control back to the
+    # stock radar it silenced for alpha long; cycling from here first would stop card before the radar
+    # is transmitting again and latch a brake-module fault for the rest of the drive.
+    if ui_state.CP is not None and ui_state.CP.brand == "honda":
+      return
+    self._params.put_bool("OnroadCycleRequested", True, block=True)
+
   def _on_alpha_long_enabled(self, state: bool):
     if state:
       def confirm_callback(result: DialogResult):
         if result == DialogResult.CONFIRM:
           self._params.put_bool("AlphaLongitudinalEnabled", True, block=True)
-          self._params.put_bool("OnroadCycleRequested", True, block=True)
+          self._request_onroad_cycle()
           self._update_toggles()
         else:
           self._alpha_long_toggle.action_item.set_state(False)
@@ -207,5 +215,5 @@ class DeveloperLayout(Widget):
 
     else:
       self._params.put_bool("AlphaLongitudinalEnabled", False, block=True)
-      self._params.put_bool("OnroadCycleRequested", True, block=True)
+      self._request_onroad_cycle()
       self._update_toggles()

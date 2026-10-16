@@ -6,7 +6,7 @@
 #include "tools/cabana/streams/replaystream.h"
 
 RouteInfoDlg::RouteInfoDlg(QWidget *parent) : QDialog(parent) {
-  auto *replay = qobject_cast<ReplayStream *>(can)->getReplay();
+  auto *replay = dynamic_cast<ReplayStream *>(can)->getReplay();
   setWindowTitle(tr("Route: %1").arg(QString::fromStdString(replay->route().name())));
 
   auto *table = new QTableWidget(replay->route().segments().size(), 7, this);
@@ -14,7 +14,7 @@ RouteInfoDlg::RouteInfoDlg(QWidget *parent) : QDialog(parent) {
   table->setEditTriggers(QAbstractItemView::NoEditTriggers);
   table->setSelectionBehavior(QAbstractItemView::SelectRows);
   table->setSelectionMode(QAbstractItemView::SingleSelection);
-  table->setHorizontalHeaderLabels({"", "rlog", "fcam", "ecam", "dcam", "qlog", "qcam"});
+  table->setHorizontalHeaderLabels({"", "rlog", "narrow road", "wide road", "driver", "qlog", "qcam"});
   table->horizontalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
   table->verticalHeader()->setVisible(false);
   table->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
@@ -23,9 +23,9 @@ RouteInfoDlg::RouteInfoDlg(QWidget *parent) : QDialog(parent) {
   for (const auto &[seg_num, seg] : replay->route().segments()) {
     table->setItem(row, 0, new QTableWidgetItem(QString::number(seg_num)));
     table->setItem(row, 1, new QTableWidgetItem(seg.rlog.empty() ? "--" : "Yes"));
-    table->setItem(row, 2, new QTableWidgetItem(seg.road_cam.empty() ? "--" : "Yes"));
+    table->setItem(row, 2, new QTableWidgetItem(seg.narrow_road_cam.empty() ? "--" : "Yes"));
     table->setItem(row, 3, new QTableWidgetItem(seg.wide_road_cam.empty() ? "--" : "Yes"));
-    table->setItem(row, 4, new QTableWidgetItem(seg.driver_cam.empty() ? "--" : "Yes"));
+    table->setItem(row, 4, new QTableWidgetItem(seg.cabin_cam.empty() ? "--" : "Yes"));
     table->setItem(row, 5, new QTableWidgetItem(seg.qlog.empty() ? "--" : "Yes"));
     table->setItem(row, 6, new QTableWidgetItem(seg.qcamera.empty() ? "--" : "Yes"));
     ++row;
