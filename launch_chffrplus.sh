@@ -12,6 +12,12 @@ function agnos_init {
   # set success flag for current boot slot
   sudo abctl --set_success
 
+  # The AGNOS power drop monitor halts the SOM when the input voltage sags
+  # below 4V, which weak USB power sources (wall chargers, computer ports)
+  # commonly do under boot load. Stop it here to cover the high power draw
+  # startup phase; hardwared starts it back up once a car harness is detected.
+  sudo systemctl stop power_drop_monitor 2> /dev/null || true
+
   # TODO: do this without udev in AGNOS
   # udev does this, but sometimes we startup faster
   sudo chgrp gpu /dev/adsprpc-smd /dev/ion /dev/kgsl-3d0
@@ -21,10 +27,25 @@ function agnos_init {
   if [ $(< /VERSION) != "$AGNOS_VERSION" ]; then
     AGNOS_PY="$DIR/system/hardware/tici/agnos.py"
     MANIFEST="$DIR/system/hardware/tici/agnos.json"
+    # We are running on a foreign AGNOS (e.g. after a branch switch). Newer AGNOS
+    # dropped pyserial, which agnos.py's import chain and the updater zipapp still
+    # need; only shim it in when the running OS really lacks it.
+    if ! python3 -c "import serial" 2> /dev/null; then
+      export PYTHONPATH="$DIR/system/hardware/tici/pyserial_compat${PYTHONPATH:+:$PYTHONPATH}"
+    fi
     if $AGNOS_PY --verify $MANIFEST; then
       sudo reboot
     fi
-    $DIR/system/hardware/tici/updater $AGNOS_PY $MANIFEST
+    # Never fall through to manager on a mismatched AGNOS; keep the updater UI up until
+    # it has flashed and rebooted us (same as upstream #38672). The updater normally
+    # reboots the device itself, so reaching the headless fallback means the UI died;
+    # if we have network, flash and swap without it.
+    while true; do
+      $DIR/system/hardware/tici/updater $AGNOS_PY $MANIFEST
+      if $AGNOS_PY --swap $MANIFEST; then
+        sudo reboot
+      fi
+    done
   fi
 }
 
