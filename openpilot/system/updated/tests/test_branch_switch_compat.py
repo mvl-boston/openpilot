@@ -83,16 +83,16 @@ class TestBranchSwitchCompat(unittest.TestCase):
 
       # casync import is deferred into extract_casync_image, so --verify works without casync deps
       agnos_py = Path(tmp, "system", "hardware", "tici", "agnos.py").read_text()
-      self.assertNotIn("\nimport openpilot.system.updated.casync.casync as casync\n", agnos_py)
-      self.assertIn(compat.CASNYC_LAZY_PREFIX, agnos_py)
+      assert "\nimport openpilot.system.updated.casync.casync as casync\n" not in agnos_py
+      assert compat.CASNYC_LAZY_PREFIX in agnos_py
       compile(agnos_py, "agnos.py", "exec")
 
       # launch loops the updater and swaps itself
       launch = Path(tmp, "launch_chffrplus.sh").read_text()
-      self.assertIn(compat.MARKER, launch)
-      self.assertIn("--swap", launch)
-      self.assertIn("pyserial_compat", launch)
-      self.assertNotIn(compat.LEGACY_LAUNCH_OLD, launch)
+      assert compat.MARKER in launch
+      assert "--swap" in launch
+      assert "pyserial_compat" in launch
+      assert compat.LEGACY_LAUNCH_OLD not in launch
       subprocess.check_call(["bash", "-n", os.path.join(tmp, "launch_chffrplus.sh")])
 
       # idempotent
@@ -106,11 +106,11 @@ class TestBranchSwitchCompat(unittest.TestCase):
          mock.patch.object(compat.HARDWARE, "get_os_version", return_value="19.9"):
       make_legacy_tree(tmp, "19.9")
       compat.apply_branch_switch_compat(tmp)
-      self.assertNotIn(compat.MARKER, Path(tmp, "launch_chffrplus.sh").read_text())
+      assert compat.MARKER not in Path(tmp, "launch_chffrplus.sh").read_text()
 
       Path(tmp, "launch_env.sh").write_text('export AGNOS_VERSION="18.4"\n')
       compat.apply_branch_switch_compat(tmp)
-      self.assertIn(compat.MARKER, Path(tmp, "launch_chffrplus.sh").read_text())
+      assert compat.MARKER in Path(tmp, "launch_chffrplus.sh").read_text()
 
   def test_apply_never_raises(self):
     with tempfile.TemporaryDirectory() as tmp, \
