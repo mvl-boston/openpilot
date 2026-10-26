@@ -13,6 +13,16 @@ void PandaSafety::configureSafetyMode(bool is_onroad) {
       safety_configured_ = true;
     }
   } else if (!is_onroad) {
+    if (initialized_) {
+      // Offroad edge: drop the previous drive's handshake flags here, where they are consumed.
+      // manager only clears them on the onroad edge and can lag deviceState.started by many
+      // seconds when a quick ignition cycle catches it still tearing down the last drive's
+      // processes. Reading them stale set the car safety mode (relay open, stock camera cut off)
+      // with no card running to replace the camera's frames: route 1cf, ~19 s without
+      // BRAKE_COMMAND/ACC_HUD on the powertrain bus, VSA latched BRAKE_ERROR_1 for the drive.
+      params_.remove("ControlsReady");
+      params_.remove("FirmwareQueryDone");
+    }
     initialized_ = false;
     safety_configured_ = false;
     log_once_ = false;
@@ -38,6 +48,12 @@ void PandaSafety::updateMultiplexingMode() {
 }
 
 std::string PandaSafety::fetchCarParams() {
+  // manager sets IsOnroad only after clearing CarParams / FirmwareQueryDone / ControlsReady for
+  // this drive (CLEAR_ON_ONROAD_TRANSITION); until then any flags we see belong to the last drive.
+  if (!params_.getBool("IsOnroad")) {
+    return {};
+  }
+
   if (!params_.getBool("FirmwareQueryDone")) {
     return {};
   }
