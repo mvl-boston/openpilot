@@ -21,11 +21,17 @@ function agnos_init {
   if [ "$(< /VERSION)" != "$AGNOS_VERSION" ]; then
     AGNOS_PY="$DIR/openpilot/common/hardware/comma/agnos.py"
     MANIFEST="$DIR/openpilot/system/hardware/comma/agnos.json"
+    # Stale updater zipapp still imports pyserial; repo root serial/ shim is on PYTHONPATH.
+    export PYTHONPATH="$DIR${PYTHONPATH:+:$PYTHONPATH}"
     if "$AGNOS_PY" --verify "$MANIFEST"; then
       sudo reboot
     fi
     while true; do
       "$DIR/openpilot/common/hardware/comma/updater" "$AGNOS_PY" "$MANIFEST"
+      # the updater UI can exit without rebooting; finish the flash and swap ourselves
+      if "$AGNOS_PY" --swap "$MANIFEST"; then
+        sudo reboot
+      fi
     done
   fi
 }
