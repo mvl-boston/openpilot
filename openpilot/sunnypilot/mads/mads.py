@@ -143,8 +143,9 @@ class ModularAssistiveDrivingSystem:
           self.transition_paused_state()
 
       self.events.remove(EventName.preEnableStandstill)
-      self.events.remove(EventName.belowEngageSpeed)
-      self.events.remove(EventName.speedTooLow)
+      if self.CP.brand != 'honda':
+        self.events.remove(EventName.belowEngageSpeed)
+        self.events.remove(EventName.speedTooLow)
       self.events.remove(EventName.cruiseDisabled)
       self.events.remove(EventName.manualRestart)
       self.events.remove(EventName.espActive)
@@ -179,6 +180,11 @@ class ModularAssistiveDrivingSystem:
             self.events_sp.add(EventNameSP.lkasDisable)
         else:
           self.events_sp.add(EventNameSP.lkasEnable)
+
+    if not self.selfdrive.enabled and self.CP.brand == 'honda':
+      if self.enabled or self.events_sp.contains(EventNameSP.lkasEnable):
+        self.events.remove(EventName.belowEngageSpeed)
+        self.events.remove(EventName.speedTooLow)
 
     if not CS.cruiseState.available and not self.no_main_cruise:
       self.events.remove(EventName.buttonEnable)
