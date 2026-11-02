@@ -42,6 +42,8 @@ for p in reversed(submodule_python_paths):
 if external_pythonpath := os.environ.get("PYTHONPATH"):
   submodule_python_paths += [p for p in external_pythonpath.split(os.pathsep) if p and p not in submodule_python_paths]
 
+from openpilot.common.scons_cache import purge_zero_byte_artifacts  # noqa: E402
+
 # Detect platform
 arch = subprocess.check_output(["uname", "-m"], encoding='utf8').rstrip()
 if platform.system() == "Darwin":
@@ -239,6 +241,10 @@ cache_dir = ARGUMENTS.get('cache_dir', default_cache_dir)
 cache_size_limit = 4e9 if "CI" in os.environ else 2e9
 CacheDir(cache_dir)
 Clean(["."], cache_dir)
+
+# An interrupted build can leave 0-byte objects that then get cached and
+# restored forever, breaking every subsequent link. Drop them before building.
+purge_zero_byte_artifacts(Dir('#').abspath, cache_dir)
 
 def prune_cache_dir(target=None, source=None, env=None):
   cache_files = sorted((os.path.join(root, f) for root, _, files in os.walk(cache_dir) for f in files), key=os.path.getmtime)
