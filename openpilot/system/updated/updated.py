@@ -274,7 +274,7 @@ class Updater:
   def update_ready(self) -> bool:
     consistent_file = Path(os.path.join(FINALIZED, ".overlay_consistent"))
     if consistent_file.is_file():
-      hash_mismatch = self.get_commit_hash(BASEDIR) != self.branches[self.target_branch]
+      hash_mismatch = self.get_commit_hash(BASEDIR) != self.get_commit_hash(FINALIZED)
       branch_mismatch = self.get_branch(BASEDIR) != self.target_branch
       on_target_branch = self.get_branch(FINALIZED) == self.target_branch
       return ((hash_mismatch or branch_mismatch) and on_target_branch)
@@ -282,11 +282,17 @@ class Updater:
 
   @property
   def update_available(self) -> bool:
-    if os.path.isdir(OVERLAY_MERGED) and len(self.branches) > 0:
-      hash_mismatch = self.get_commit_hash(OVERLAY_MERGED) != self.branches[self.target_branch]
-      branch_mismatch = self.get_branch(OVERLAY_MERGED) != self.target_branch
-      return hash_mismatch or branch_mismatch
-    return False
+    branch_mismatch = self.get_branch(BASEDIR) != self.target_branch
+    if len(self.branches) == 0:
+      return branch_mismatch
+
+    remote_hash = self.branches[self.target_branch]
+    running_behind = self.get_commit_hash(BASEDIR) != remote_hash
+    overlay_behind = os.path.isdir(OVERLAY_MERGED) and self.get_commit_hash(OVERLAY_MERGED) != remote_hash
+    overlay_branch_mismatch = (
+      os.path.isdir(OVERLAY_MERGED) and self.get_branch(OVERLAY_MERGED) != self.target_branch
+    )
+    return running_behind or overlay_behind or branch_mismatch or overlay_branch_mismatch
 
   def get_branch(self, path: str) -> str:
     return run(["git", "rev-parse", "--abbrev-ref", "HEAD"], path).rstrip()
