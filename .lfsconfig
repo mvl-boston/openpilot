@@ -3,3 +3,9 @@
 	pushurl = https://huggingface.co/sunnypilot/sunnypilot-lfs.git/info/lfs
 
 	locksverify = false
+
+	# The 800 MB chestnut model is ~85% of the LFS payload. Leave it as a pointer on
+	# checkout (also honored by the smudge filter of older updaters switching to this
+	# branch); sunnypilot/models/default_chestnut.py downloads it at runtime when
+	# chestnut hardware is present. Use `git lfs pull --exclude=''` to fetch it anyway.
+	fetchexclude = openpilot/selfdrive/modeld/models/big_driving_tinygrad.pkl
