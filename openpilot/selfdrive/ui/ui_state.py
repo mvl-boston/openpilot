@@ -111,6 +111,8 @@ class UIState(UIStateSP):
     self.recording_audio: bool = False
     self.panda_type: log.PandaState.PandaType = log.PandaState.PandaType.unknown
     self.personality: log.LongitudinalPersonality = log.LongitudinalPersonality.standard
+    self.experimental_mode: bool = self.params.get_bool("ExperimentalMode")
+    self.experimental_mode_confirmed: bool = self.params.get_bool("ExperimentalModeConfirmed")
     self.has_longitudinal_control: bool = False
     self.is_body: bool | None = False
     self.CP: car.CarParams | None = None
@@ -255,6 +257,9 @@ class UIState(UIStateSP):
         self.has_longitudinal_control = self.params.get_bool("AlphaLongitudinalEnabled")
       else:
         self.has_longitudinal_control = self.CP.openpilotLongitudinalControl
+
+    self.experimental_mode = self.params.get_bool("ExperimentalMode")
+    self.experimental_mode_confirmed = self.params.get_bool("ExperimentalModeConfirmed")
 
     self.recording_audio = self.params.get_bool("RecordAudio") and self.started
     self.is_metric = self.params.get_bool("IsMetric")

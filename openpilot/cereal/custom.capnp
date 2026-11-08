@@ -348,7 +348,7 @@ struct OnroadEventSP @0xda96579883444c35 {
     silentParkBrake @11;
     controlsMismatchLateral @12;
     hyundaiRadarTracksConfirmed @13;
-    experimentalModeSwitchedDEPRECATED @14;
+    experimentalModeSwitched @14;
     wrongCarModeAlertOnly @15;
     pedalPressedAlertOnly @16;
     laneTurnLeft @17;
