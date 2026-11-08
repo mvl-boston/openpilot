@@ -4,6 +4,8 @@ Copyright (c) 2021-, Haibin Wen, sunnypilot, and a number of other contributors.
 This file is part of sunnypilot and is licensed under the MIT License.
 See the LICENSE.md file in the root directory for more details.
 """
+from opendbc.car.honda.values import CAR, HONDA_BOSCH, HondaFlags
+
 from openpilot.selfdrive.ui.sunnypilot.layouts.settings.vehicle.brands.base import BrandSettings
 from openpilot.selfdrive.ui.ui_state import ui_state
 from openpilot.system.ui.lib.application import gui_app
@@ -62,4 +64,13 @@ class HondaSettings(BrandSettings):
       self._request_onroad_cycle()
 
   def update_settings(self):
-    pass
+    nidec = False
+    bundle = ui_state.params.get("CarPlatformBundle")
+    if bundle and bundle.get("brand") == "honda":
+      platform = bundle.get("platform")
+      if platform in CAR:
+        nidec = CAR[platform] not in HONDA_BOSCH
+    elif ui_state.CP is not None and ui_state.CP.brand == "honda":
+      nidec = not bool(ui_state.CP.flags & HondaFlags.BOSCH)
+
+    self.enforce_stock_longitudinal.set_visible(nidec)

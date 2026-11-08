@@ -82,6 +82,12 @@ class TestOpaquePerBrandFlags(OpenpilotTestCase):
   def test_toyota_tss2_default_false(self, caps):
     assert caps["toyota_tss2"] is False
 
+  def test_honda_nidec_field_present(self):
+    assert "honda_nidec" in CAPABILITY_FIELDS
+
+  def test_honda_nidec_default_false(self, caps):
+    assert caps["honda_nidec"] is False
+
 
 class TestCapabilitiesShape(OpenpilotTestCase):
   def test_all_fields_present(self, caps):

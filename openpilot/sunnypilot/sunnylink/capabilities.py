@@ -8,6 +8,7 @@ import json
 
 from openpilot.cereal import custom, messaging
 from opendbc.car.structs import car
+from opendbc.car.honda.values import CAR as HONDA_CAR, HONDA_BOSCH, HondaFlags
 from opendbc.car.hyundai.values import CAR as HYUNDAI_CAR, UNSUPPORTED_LONGITUDINAL_CAR
 from opendbc.car.subaru.values import CAR as SUBARU_CAR, SubaruFlags
 from opendbc.car.toyota.values import CAR as TOYOTA_CAR, ToyotaFlags
@@ -45,6 +46,7 @@ CAPABILITY_FIELDS = (
   "subaru_has_sng",
   "hyundai_alpha_long_available",
   "toyota_tss2",
+  "honda_nidec",
   "custom_model_active",
 )
 
@@ -69,6 +71,7 @@ CAPABILITY_LABELS: dict[str, str] = {
   "subaru_has_sng": "Subaru Stop-and-Go available",
   "hyundai_alpha_long_available": "Hyundai Alpha Longitudinal available",
   "toyota_tss2": "Toyota TSS2 platform",
+  "honda_nidec": "Honda Nidec platform",
   "custom_model_active": "Non-Default model selected",
 }
 
@@ -89,6 +92,7 @@ CAR_CAPABILITY_FIELDS = (
   "subaru_has_sng",
   "hyundai_alpha_long_available",
   "toyota_tss2",
+  "honda_nidec",
 )
 
 # Explicit defaults for non-boolean capability fields
@@ -143,6 +147,15 @@ def _resolve_brand_capabilities(caps: dict, bundle_platform: str, CP) -> None:
         cloudlog.exception(f"capabilities: unknown toyota platform {bundle_platform!r}")
     elif CP is not None:
       caps["toyota_tss2"] = bool(CP.flags & ToyotaFlags.TSS2)
+
+  elif brand == "honda":
+    if bundle_platform:
+      try:
+        caps["honda_nidec"] = HONDA_CAR[bundle_platform] not in HONDA_BOSCH
+      except KeyError:
+        cloudlog.exception(f"capabilities: unknown honda platform {bundle_platform!r}")
+    elif CP is not None:
+      caps["honda_nidec"] = not bool(CP.flags & HondaFlags.BOSCH)
 
 
 def generate_capabilities(params: Params | None = None) -> dict:
