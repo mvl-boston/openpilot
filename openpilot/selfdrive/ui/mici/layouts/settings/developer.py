@@ -93,7 +93,8 @@ class DeveloperLayoutMici(NavScroller):
     self._lane_centering_toggle = BigParamControl("SPLC (StarPilot Lane Centering)", "LaneCentering",
                                                   toggle_callback=self._update_lane_centering_settings_enabled,
                                                   description="Experimentally bias the model command toward the detected lane center. Requires two " +
-                                                              "confident lane lines and remains subject to normal curvature and jerk limits.")
+                                                              "confident lane lines and remains subject to normal curvature and jerk limits. Not " +
+                                                              "available while Blendful is enabled.")
     self._lane_centering_pause_toggle = BigToggle("SPLC pause on signal",
                                                   initial_state=bool(ui_state.params.get("LaneCenteringPauseOnSignal", return_default=True)),
                                                   toggle_callback=self._on_lane_centering_pause_on_signal,
@@ -192,6 +193,16 @@ class DeveloperLayoutMici(NavScroller):
     # Refresh toggles from params to mirror external changes
     for key, item in self._refresh_toggles:
       item.set_checked(ui_state.params.get_bool(key))
+
+    # SPLC and Blendful both steer toward lane center; Blendful wins and SPLC is forced off while it is on
+    blendful_on = ui_state.params.get_bool("Blendful")
+    if blendful_on and ui_state.params.get_bool("LaneCentering"):
+      ui_state.params.put_bool("LaneCentering", False, block=True)
+      self._lane_centering_toggle.set_checked(False)
+    self._lane_centering_toggle.set_enabled(not blendful_on)
+    lane_centering_value = "blendful is on" if blendful_on else ""
+    if self._lane_centering_toggle.value != lane_centering_value:
+      self._lane_centering_toggle.set_value(lane_centering_value)
 
     # this param defaults to enabled, so read it with its declared default
     self._lane_centering_pause_toggle.set_checked(bool(ui_state.params.get("LaneCenteringPauseOnSignal", return_default=True)))

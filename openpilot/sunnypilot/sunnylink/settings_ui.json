@@ -2040,7 +2040,14 @@
               "key": "LaneCentering",
               "widget": "toggle",
               "title": "SPLC (StarPilot Lane Centering)",
-              "description": "Experimentally bias the model command toward the detected lane center. Requires two confident lane lines and remains subject to normal curvature and jerk limits."
+              "description": "Experimentally bias the model command toward the detected lane center. Requires two confident lane lines and remains subject to normal curvature and jerk limits. Not available while Blendful is enabled.",
+              "enablement": [
+                {
+                  "type": "param",
+                  "key": "Blendful",
+                  "equals": false
+                }
+              ]
             },
             {
               "key": "LaneCenteringPauseOnSignal",
@@ -2048,6 +2055,11 @@
               "title": "SPLC Pause on Turn Signal",
               "description": "Fade the lane-centering correction out when a turn signal is active so it does not fight a lane change or turn.",
               "enablement": [
+                {
+                  "type": "param",
+                  "key": "Blendful",
+                  "equals": false
+                },
                 {
                   "type": "param",
                   "key": "LaneCentering",
@@ -2067,6 +2079,11 @@
               "enablement": [
                 {
                   "type": "param",
+                  "key": "Blendful",
+                  "equals": false
+                },
+                {
+                  "type": "param",
                   "key": "LaneCentering",
                   "equals": true
                 }
@@ -2081,6 +2098,11 @@
               "max": 1.0,
               "step": 0.05,
               "enablement": [
+                {
+                  "type": "param",
+                  "key": "Blendful",
+                  "equals": false
+                },
                 {
                   "type": "param",
                   "key": "LaneCentering",
