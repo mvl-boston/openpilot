@@ -18,7 +18,8 @@ from openpilot.common.realtime import Ratekeeper
 from openpilot.common.swaglog import cloudlog
 from openpilot.common.hardware.hw import Paths
 
-from openpilot.cereal import messaging, custom
+from openpilot.cereal import log, messaging, custom
+from openpilot.sunnypilot.models.default_chestnut import DefaultChestnutDownloader, needs_default_chestnut_download
 from openpilot.sunnypilot.models.fetcher import ModelFetcher
 from openpilot.sunnypilot.models.helpers import (ACTIVE_BUNDLE_KEYS, get_active_bundle, get_selected_bundle,
                                                   resolve_bundle_by_ref, validate_active_bundles, verify_file)
@@ -123,6 +124,9 @@ def _fetch_piece(url: str, path: str, index: int, start: int, end: int | None, p
 class ModelManagerSP:
   """Manages model downloads and status reporting"""
 
+  # set while downloading outside of a user selection (stock chestnut model)
+  _background_download = False
+
   def __init__(self):
     self.params = Params()
     self.model_fetcher = ModelFetcher(self.params)
@@ -136,8 +140,12 @@ class ModelManagerSP:
     self._block_size = 128 * 1000  # 128 KB network read blocks
     self._download_start_times: dict[str, float] = {}  # Track start time per model
     self._download_ref: bytes | str | None = None
+    self._default_chestnut = DefaultChestnutDownloader()
 
   def _download_interrupted(self) -> bool:
+    if self._background_download:
+      # a user selection takes the link over from a background download
+      return self.params.get("ModelManager_DownloadRef") is not None
     # only removal cancels: a different ref is a queued selection that
     # _release_download_ref leaves in place for the next tick
     return self.params.get("ModelManager_DownloadRef") is None
@@ -345,6 +353,39 @@ class ModelManagerSP:
     """Main entry point for downloading a model bundle"""
     asyncio.run(self._download_bundle(model_bundle, destination_path, source))
 
+  def download_background(self, artifacts: list[custom.ModelManagerSP.Artifact], destination_path: str) -> None:
+    """Downloads artifacts that are not a user selection; a selection made meanwhile cancels them"""
+    async def run():
+      for artifact in artifacts:
+        await self._process_artifact(artifact, destination_path)
+
+    os.makedirs(destination_path, exist_ok=True)
+    self._background_download = True
+    try:
+      asyncio.run(run())
+    finally:
+      self._background_download = False
+
+  def _ensure_default_chestnut_model(self) -> None:
+    if not needs_default_chestnut_download(self.params, self.chestnut_present):
+      return
+    if self.params.get("ModelManager_DownloadRef") is not None:
+      return
+    if not self._default_chestnut.should_attempt():
+      return
+
+    device_state = self.sm['deviceState']
+    if device_state.networkType == log.DeviceState.NetworkType.none:
+      return
+    if device_state.networkMetered:
+      cloudlog.debug("Skipping default chestnut model download on metered network")
+      return
+
+    try:
+      self._default_chestnut.run(self)
+    except Exception as e:
+      cloudlog.exception(f"Default chestnut model download failed: {e}")
+
   def _process_download_requests(self) -> None:
     # loops so a ref queued during a download starts in the same tick, without
     # the bar dropping to idle for a tick between the two transfers
@@ -385,6 +426,7 @@ class ModelManagerSP:
             self.params.put("ModelManager_DownloadRef", DEFAULT_MODEL_REF)
 
         self._process_download_requests()
+        self._ensure_default_chestnut_model()
 
         if self.params.get("ModelManager_ClearCache"):
           self.clear_model_cache()
