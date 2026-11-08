@@ -67,3 +67,7 @@ macros:
   # Gate for custom model features based on active source.
   custom_model:
     - { type: capability, field: custom_model_active, equals: true }
+
+  # SPLC (StarPilot Lane Centering) and Blendful both bias toward lane center; SPLC is only writable while Blendful is off.
+  blendful_off:
+    - {type: param, key: Blendful, equals: false}

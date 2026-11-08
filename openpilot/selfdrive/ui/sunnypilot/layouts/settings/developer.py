@@ -53,10 +53,10 @@ class DeveloperLayoutSP(DeveloperLayout):
 
     self.error_log_btn = button_item(tr("Error Log"), tr("VIEW"), tr("View the error log for sunnypilot crashes."), callback=self._on_error_log_clicked)
 
-    self.lane_centering_toggle = toggle_item_sp(tr("SPLC (StarPilot Lane Centering)"),
-                                                tr("StarPilot Lane Centering (SPLC): experimentally bias the model command toward the detected lane " +
-                                                   "center. Requires two confident lane lines and remains subject to normal curvature and jerk " +
-                                                   "limits. Ported from StarPilot."), param="LaneCentering")
+    self._lane_centering_desc = tr("StarPilot Lane Centering (SPLC): experimentally bias the model command toward the detected lane " +
+                                   "center. Requires two confident lane lines and remains subject to normal curvature and jerk " +
+                                   "limits. Ported from StarPilot. Not available while Blendful is enabled.")
+    self.lane_centering_toggle = toggle_item_sp(tr("SPLC (StarPilot Lane Centering)"), self._lane_centering_desc, param="LaneCentering")
 
     # this param defaults to enabled, so it can't use the ToggleSP param binding (get_bool returns False when unset)
     self.lane_centering_pause_toggle = toggle_item_sp(tr("SPLC Pause on Turn Signal"),
@@ -137,8 +137,23 @@ class DeveloperLayoutSP(DeveloperLayout):
     self.enable_github_runner_toggle.set_visible(show_advanced and not self._is_release_branch)
     self.error_log_btn.set_visible(not self._is_release_branch)
 
-    # SPLC sub-settings only apply while lane centering is enabled
+    # SPLC and Blendful both steer toward lane center; Blendful wins and SPLC is forced off while it is on
+    blendful_on = ui_state.params.get_bool("Blendful")
     lane_centering_on = ui_state.params.get_bool("LaneCentering")
+    if blendful_on and lane_centering_on:
+      ui_state.params.put_bool("LaneCentering", False)
+      lane_centering_on = False
+    if blendful_on:
+      self.lane_centering_toggle.action_item.set_state(False)
+    self.lane_centering_toggle.action_item.set_enabled(not blendful_on)
+
+    lane_centering_desc = self._lane_centering_desc if not blendful_on else \
+      f"<b>{tr('Turn off Blendful in the Models panel to use SPLC.')}</b><br><br>{self._lane_centering_desc}"
+    if self.lane_centering_toggle.description != lane_centering_desc:
+      self.lane_centering_toggle.set_description(lane_centering_desc)
+      self.lane_centering_toggle.show_description(blendful_on)
+
+    # SPLC sub-settings only apply while lane centering is enabled
     self.lane_centering_pause_toggle.action_item.set_enabled(lane_centering_on)
     self.lane_center_offset_control.action_item.set_enabled(lane_centering_on)
     self.lane_centering_e2e_authority_control.action_item.set_enabled(lane_centering_on)
