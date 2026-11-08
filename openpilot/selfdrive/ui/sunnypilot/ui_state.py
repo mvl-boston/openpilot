@@ -7,6 +7,7 @@ See the LICENSE.md file in the root directory for more details.
 from enum import Enum
 
 from openpilot.cereal import messaging, log, custom
+from opendbc.car.honda.values import HondaFlags
 from opendbc.car.structs import car
 from opendbc.sunnypilot.car.interfaces import has_bsm
 from openpilot.common.params import Params
@@ -222,6 +223,12 @@ class UIStateSP:
       # Alpha longitudinal: clear if not available
       if not CP.alphaLongitudinalAvailable:
         self.params.remove("AlphaLongitudinalEnabled")
+
+      # Honda enforce-stock-longitudinal is Nidec-only; Bosch selects stock vs. openpilot longitudinal
+      # with the alpha longitudinal toggle. card reads this param once at init, so clearing it here
+      # never affects the current drive and does not request an onroad cycle.
+      if CP.brand == "honda" and CP.flags & HondaFlags.BOSCH:
+        self.params.remove("HondaEnforceStockLongitudinal")
 
       # BSM not available: clear BSM-dependent settings
       if not has_bsm(CP, self.CP_SP):
