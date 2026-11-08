@@ -241,6 +241,9 @@ class UIStateSP:
       self.params.remove("LateralJerkTorqueController")
       self.params.remove("AlphaLongitudinalEnabled")
 
+    if not has_long:
+      self.params.remove("ExperimentalMode")
+
     # ICBM: clear if not available or if full longitudinal control is active
     if self.CP_SP is not None:
       if not self.CP_SP.intelligentCruiseButtonManagementAvailable or has_long:

@@ -823,6 +823,7 @@ struct SelfdriveState {
 
   # configurable driving settings
   personality @11 :LongitudinalPersonality;
+  experimentalMode @10 :Bool;
 
   enum AudibleAlert {
     none @0;
@@ -865,7 +866,6 @@ struct SelfdriveState {
 
   deprecated :group {
     alertSound @8 :Car.CarControl.HUDControl.AudibleAlert;
-    experimentalMode @10 :Bool;
   }
 }
 
