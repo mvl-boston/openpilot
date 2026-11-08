@@ -225,9 +225,10 @@ class UIStateSP:
         self.params.remove("AlphaLongitudinalEnabled")
 
       # Honda enforce-stock-longitudinal is Nidec-only; Bosch selects stock vs. openpilot longitudinal
-      # with the alpha longitudinal toggle. card reads this param once at init, so clearing it here
-      # never affects the current drive and does not request an onroad cycle.
-      if CP.brand == "honda" and CP.flags & HondaFlags.BOSCH:
+      # with the alpha longitudinal toggle. Only cleared offroad: the Bosch CarController watches this
+      # param together with AlphaLongitudinalEnabled and applies a change through an onroad cycle, so
+      # clearing it mid-drive would cycle card without the user touching a toggle.
+      if CP.brand == "honda" and CP.flags & HondaFlags.BOSCH and self.is_offroad():
         self.params.remove("HondaEnforceStockLongitudinal")
 
       # BSM not available: clear BSM-dependent settings
