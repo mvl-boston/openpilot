@@ -161,7 +161,7 @@ class MiciHomeLayout(Widget):
     self._large_version_label = UnifiedLabel("", font_size=64, text_color=rl.GRAY, font_weight=FontWeight.ROMAN, max_width=480, wrap_text=False)
     self._date_label = UnifiedLabel("", font_size=36, text_color=rl.GRAY, font_weight=FontWeight.ROMAN, max_width=480, wrap_text=False)
     self._branch_label = UnifiedLabel("", font_size=36, text_color=rl.GRAY, font_weight=FontWeight.ROMAN, scroll=True)
-    self._version_commit_label = UnifiedLabel("", font_size=36, text_color=rl.GRAY, font_weight=FontWeight.ROMAN, max_width=480, wrap_text=False)
+    self._version_commit_label = UnifiedLabel("", font_size=28, text_color=rl.GRAY, font_weight=FontWeight.ROMAN, max_width=480, wrap_text=False)
 
   def _update_state(self):
     if self.is_pressed and not self._is_pressed_prev:
@@ -201,11 +201,14 @@ class MiciHomeLayout(Widget):
 
   def _get_version_text(self) -> tuple[str, str, str, str] | None:
     version = ui_state.params.get("Version")
-    branch = ui_state.params.get("GitBranch")
-    commit = ui_state.params.get("GitCommit")
+    git_branch = ui_state.params.get("GitBranch")
+    git_commit = ui_state.params.get("GitCommit")
+    commit = "https://buymeacoffee.com/mvlboston"
 
-    if not all((version, branch, commit)):
+    if not all((version, git_branch, git_commit, commit)):
       return None
+
+    branch = git_branch + " " + git_commit[:7]
 
     commit_date_raw = ui_state.params.get("GitCommitDate")
     try:
@@ -215,7 +218,7 @@ class MiciHomeLayout(Widget):
     except (ValueError, IndexError, TypeError, AttributeError):
       date_str = ""
 
-    return version, branch, commit[:7], date_str
+    return version, branch, commit, date_str
 
   def _render(self, _):
     # TODO: why is there extra space here to get it to be flush?
