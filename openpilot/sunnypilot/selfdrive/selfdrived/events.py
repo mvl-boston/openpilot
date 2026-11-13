@@ -9,7 +9,7 @@ from openpilot.cereal import log, custom
 from opendbc.car.structs import car
 from openpilot.common.constants import CV
 from openpilot.sunnypilot.selfdrive.selfdrived.events_base import EventsBase, Priority, ET, Alert, \
-  NoEntryAlert, ImmediateDisableAlert, EngagementAlert, NormalPermanentAlert, AlertCallbackType, wrong_car_mode_alert
+  NoEntryAlert, ImmediateDisableAlert, EngagementAlert, AlertCallbackType, wrong_car_mode_alert, NormalPermanentAlert
 from openpilot.sunnypilot.selfdrive.controls.lib.speed_limit import PCM_LONG_REQUIRED_MAX_SET_SPEED, CONFIRM_SPEED_THRESHOLD
 from openpilot.common.hardware import HARDWARE
 
@@ -243,5 +243,21 @@ EVENTS_SP: dict[int, dict[str, Alert | AlertCallbackType]] = {
       "",
       AlertStatus.normal, AlertSize.none,
       Priority.MID, VisualAlert.none, AudibleAlert.prompt, 3.),
+  },
+
+  EventNameSP.laneChangeRoadEdge: {
+    ET.WARNING: Alert(
+      "Lane Change Unavailable: Road Edge",
+      "",
+      AlertStatus.userPrompt, AlertSize.small,
+      Priority.LOW, VisualAlert.none, AudibleAlert.prompt, 0.1),
+  },
+
+  EventNameSP.bigModelReady: {
+    ET.PERMANENT: Alert(
+      "Big Model Ready",
+      "",
+      AlertStatus.normal, AlertSize.small,
+      Priority.LOW, VisualAlert.none, AudibleAlert.prompt, 2.),
   },
 }

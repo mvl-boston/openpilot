@@ -6,6 +6,21 @@ icon: vehicle
 order: 99
 kind: vehicle
 sections:
+- id: honda
+  title: Honda / Acura Settings
+  description: ''
+  items:
+  - key: HondaEnforceStockLongitudinal
+    widget: toggle
+    needs_onroad_cycle: true
+    title: 'Honda Nidec: Enforce Factory Longitudinal Control'
+    description: sunnypilot will not take over control of gas and brakes. Factory Honda Nidec longitudinal control will be used.
+    visibility:
+    - type: capability
+      field: honda_nidec
+      equals: true
+    enablement:
+    - $ref: '#/macros/not_engaged'
 - id: hyundai
   title: Hyundai / Kia / Genesis Settings
   description: ''
@@ -101,3 +116,18 @@ sections:
     - type: param
       key: ToyotaEnforceStockLongitudinal
       equals: false
+  - key: ToyotaTSS2Smooth
+    widget: toggle
+    needs_onroad_cycle: true
+    title: TSS2 Smooth Longitudinal (Alpha)
+    description: Enable smoother longitudinal control for TSS2 vehicles. Uses a custom speed-dependent integral gain curve
+      for smoother traffic driving.
+    enablement:
+    - $ref: '#/macros/not_engaged'
+    - $ref: '#/macros/longitudinal'
+    - type: param
+      key: ToyotaEnforceStockLongitudinal
+      equals: false
+    - type: capability
+      field: toyota_tss2
+      equals: true
