@@ -19,10 +19,10 @@ class UIConfig:
   header_height: int = 300
   border_size: int = 30
   button_size: int = 192
+  wheel_icon_size: int = 144
   set_speed_width_metric: int = 200
   set_speed_width_imperial: int = 172
   set_speed_height: int = 204
-  wheel_icon_size: int = 144
 
 
 @dataclass(frozen=True)
@@ -117,9 +117,10 @@ class HudRenderer(Widget):
 
     self._draw_current_speed(rect)
 
-    button_x = rect.x + rect.width - UI_CONFIG.border_size - UI_CONFIG.button_size
-    button_y = rect.y + UI_CONFIG.border_size
-    self._exp_button.render(rl.Rectangle(button_x, button_y, UI_CONFIG.button_size, UI_CONFIG.button_size))
+    if ui_state.has_longitudinal_control:
+      button_x = rect.x + rect.width - UI_CONFIG.border_size - UI_CONFIG.button_size
+      button_y = rect.y + UI_CONFIG.border_size
+      self._exp_button.render(rl.Rectangle(button_x, button_y, UI_CONFIG.button_size, UI_CONFIG.button_size))
 
   def user_interacting(self) -> bool:
     return self._exp_button.is_pressed
