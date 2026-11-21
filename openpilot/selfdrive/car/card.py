@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import inspect
 import os
 import time
 import threading
@@ -65,7 +66,7 @@ class Car:
 
   def __init__(self, CI=None, RI=None) -> None:
     self.can_sock = messaging.sub_sock('can', timeout=20)
-    self.sm = messaging.SubMaster(['pandaStates', 'carControl', 'onroadEvents'])
+    self.sm = messaging.SubMaster(['pandaStates', 'carControl', 'onroadEvents', 'modelV2'])
     self.pm = messaging.PubMaster(['sendcan', 'carState', 'carParams', 'carOutput', 'radarTracks'])
 
     self.can_rcv_cum_timeout_counter = 0
@@ -107,6 +108,9 @@ class Car:
     else:
       self.CI, self.CP = CI, CI.CP
       self.RI = RI
+
+    # the opendbc fork's CarInterface.apply takes modelV2 for cars that render it; stock opendbc does not
+    self._apply_takes_model = 'model' in inspect.signature(self.CI.apply).parameters
 
     self.CP.alternativeExperience = 0
     openpilot_enabled_toggle = self.params.get_bool("OpenpilotEnabledToggle")
@@ -234,7 +238,8 @@ class Car:
     if self.sm.all_alive(['carControl']):
       # send car controls over can
       now_nanos = self.can_log_mono_time if REPLAY else int(time.monotonic() * 1e9)
-      self.last_actuators_output, can_sends = self.CI.apply(CC, now_nanos)
+      apply_kwargs = {'model': self.sm['modelV2'] if self.sm.valid['modelV2'] else None} if self._apply_takes_model else {}
+      self.last_actuators_output, can_sends = self.CI.apply(CC, now_nanos, **apply_kwargs)
       self.pm.send('sendcan', can_list_to_can_capnp(can_sends, msgtype='sendcan', valid=CS.canValid))
 
       self.CC_prev = CC
