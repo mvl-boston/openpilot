@@ -14,6 +14,9 @@ legacy tree start its own updater instead of dying on the boot logo:
   can't start (raylib in AGNOS 20.4+ is incompatible with legacy UIs), and
   a wait after `reboot` so nothing flashes over the just-activated slot
 - comma/agnos.json symlink for updaters that look at the newer path
+
+Independent of AGNOS, reset_foreign_lfs_filter() drops the repo-local LFS
+filter of upstream's lfs.py client before checking out a branch without it.
 """
 import os
 import shutil
@@ -170,3 +173,36 @@ def _patch_legacy_launch(basedir: str) -> None:
     return
 
   Path(launch).write_text(text.replace(LEGACY_LAUNCH_OLD, LEGACY_LAUNCH_NEW, 1))
+
+
+def _git(cmd: list[str], cwd: str) -> str:
+  return subprocess.check_output(["git", *cmd], cwd=cwd, stderr=subprocess.STDOUT, encoding="utf8").strip()
+
+
+def reset_foreign_lfs_filter(cwd: str, target: str = "FETCH_HEAD") -> bool:
+  """Upstream branches install their own LFS client as a repo-local filter
+  (.git/lfs.py). It outlives a switch to a branch that doesn't ship it and
+  shadows the stock git-lfs filter from the global config. That client only
+  knows the upstream object store and leaves pointer files behind for all
+  other objects without failing the checkout, so drop it before checking out
+  a target that doesn't ship lfs.py."""
+  try:
+    try:
+      process = _git(["config", "--local", "--get", "filter.lfs.process"], cwd)
+    except subprocess.CalledProcessError:
+      return False
+    if "lfs.py" not in process:
+      return False
+
+    try:
+      _git(["cat-file", "-e", f"{target}:lfs.py"], cwd)
+      return False  # target ships the client the filter points at
+    except subprocess.CalledProcessError:
+      pass
+
+    cloudlog.warning(f"{MARKER}: removing stale local LFS filter: {process}")
+    _git(["config", "--local", "--remove-section", "filter.lfs"], cwd)
+    return True
+  except Exception:
+    cloudlog.exception(f"{MARKER}: failed to reset LFS filter in {cwd}")
+    return False
