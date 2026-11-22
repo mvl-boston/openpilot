@@ -4,6 +4,14 @@ DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null && pwd )"
 
 source "$DIR/launch_env.sh"
 
+# `reboot` returns while shutdown is still in progress. Anything that runs after a
+# successful AGNOS verify/swap (e.g. another flash attempt) would corrupt the slot
+# that was just activated, so block here instead of falling through.
+function reboot_and_wait {
+  sudo reboot
+  sleep 300
+}
+
 function agnos_init {
   # TODO: move this to agnos
   sudo rm -f /data/etc/NetworkManager/system-connections/*.nmmeta
@@ -24,13 +32,15 @@ function agnos_init {
     # Stale updater zipapp still imports pyserial; repo root serial/ shim is on PYTHONPATH.
     export PYTHONPATH="$DIR${PYTHONPATH:+:$PYTHONPATH}"
     if "$AGNOS_PY" --verify "$MANIFEST"; then
-      sudo reboot
+      reboot_and_wait
     fi
     while true; do
-      "$DIR/openpilot/common/hardware/comma/updater" "$AGNOS_PY" "$MANIFEST"
+      # the bundled updater can't draw on an AGNOS with an incompatible raylib; the OS ships a matching one
+      "$DIR/openpilot/common/hardware/comma/updater" "$AGNOS_PY" "$MANIFEST" || \
+        { [ -x /usr/comma/updater ] && /usr/comma/updater "$AGNOS_PY" "$MANIFEST"; }
       # the updater UI can exit without rebooting; finish the flash and swap ourselves
       if "$AGNOS_PY" --swap "$MANIFEST"; then
-        sudo reboot
+        reboot_and_wait
       fi
     done
   fi
@@ -63,7 +73,7 @@ function launch {
           mv "${STAGING_ROOT}/finalized" "$DIR"
           cd "$DIR"
           # releases before the openpilot/ move can't swap AGNOS on newer AGNOS, use ours
-          [ ! -L system/hardware/tici/agnos.json ] && /data/safe_staging/old_openpilot/openpilot/common/hardware/comma/agnos.py --verify system/hardware/tici/agnos.json && sudo reboot
+          [ ! -L system/hardware/tici/agnos.json ] && /data/safe_staging/old_openpilot/openpilot/common/hardware/comma/agnos.py --verify system/hardware/tici/agnos.json && reboot_and_wait
 
           echo "Restarting launch script ${LAUNCHER_LOCATION}"
           unset AGNOS_VERSION
