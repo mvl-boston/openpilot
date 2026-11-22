@@ -9,7 +9,10 @@ legacy tree start its own updater instead of dying on the boot logo:
 - pyserial shim: AGNOS 19.x dropped pyserial but legacy trees and their
   prebuilt updater zipapp still `import serial`
 - lazy casync import in agnos.py so `--verify` works without casync deps
-- `--swap` loop in launch so an updater UI exit without reboot still swaps
+- `--swap` loop in launch so an updater UI exit without reboot still swaps,
+  with the OS updater (/usr/comma/updater) as fallback when the bundled UI
+  can't start (raylib in AGNOS 20.4+ is incompatible with legacy UIs), and
+  a wait after `reboot` so nothing flashes over the just-activated slot
 - comma/agnos.json symlink for updaters that look at the newer path
 """
 import os
@@ -35,11 +38,16 @@ LEGACY_LAUNCH_NEW = f"""    # {MARKER} (injected by the updater of the previous 
     fi
     if $AGNOS_PY --verify $MANIFEST; then
       sudo reboot
+      # reboot returns immediately; never flash over the slot that was just activated
+      sleep 300
     fi
     while true; do
-      $DIR/system/hardware/tici/updater $AGNOS_PY $MANIFEST
+      # the bundled updater can't draw on an AGNOS with an incompatible raylib; the OS ships a matching one
+      $DIR/system/hardware/tici/updater $AGNOS_PY $MANIFEST || \\
+        {{ [ -x /usr/comma/updater ] && /usr/comma/updater $AGNOS_PY $MANIFEST; }}
       if $AGNOS_PY --swap $MANIFEST; then
         sudo reboot
+        sleep 300
       fi
     done"""
 
