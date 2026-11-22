@@ -19,7 +19,7 @@ from openpilot.common.swaglog import cloudlog
 from openpilot.selfdrive.selfdrived.alertmanager import set_offroad_alert
 from openpilot.common.hardware import AGNOS, HARDWARE
 from openpilot.common.version import get_build_metadata
-from openpilot.system.updated.branch_switch_compat import apply_branch_switch_compat
+from openpilot.system.updated.branch_switch_compat import apply_branch_switch_compat, reset_foreign_lfs_filter
 
 LOCK_FILE = os.getenv("UPDATER_LOCK_FILE", "/tmp/safe_staging_overlay.lock")
 STAGING_ROOT = os.getenv("UPDATER_STAGING_ROOT", "/data/safe_staging")
@@ -410,6 +410,8 @@ class Updater:
     branch = self.target_branch
     git_fetch_output = run(["git", "fetch", "origin", branch], OVERLAY_MERGED)
     cloudlog.info("git fetch success: %s", git_fetch_output)
+
+    reset_foreign_lfs_filter(OVERLAY_MERGED)
 
     cloudlog.info("git reset in progress")
     cmds = [
