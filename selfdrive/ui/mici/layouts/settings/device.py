@@ -165,6 +165,14 @@ class PairBigButton(BigButton):
 
 
 UPDATER_TIMEOUT = 10.0  # seconds to wait for updater to respond
+
+
+def _updater_sub_label(updater_state: str) -> str:
+  if updater_state == "downloading...":
+    progress = ui_state.params.get("UpdaterProgress")
+    if progress is not None:
+      return f"downloading...\n{int(progress)}%"
+  return updater_state
 # same green as the keyboard enter pill (icons_mici/settings/keyboard/enter.png)
 DOWNLOAD_READY_GREEN = rl.Color(16, 104, 38, 207)
 
@@ -293,8 +301,9 @@ class UpdateOpenpilotBigButton(BigButton):
         self._state = UpdaterState.IDLE
         self._hide_value_t = rl.get_time()
       else:
-        if self.get_value() != updater_state:
-          self.set_value(updater_state)
+        display = _updater_sub_label(updater_state)
+        if self.get_value() != display:
+          self.set_value(display)
 
     elif self._state == UpdaterState.IDLE:
       self.set_rotate_icon(False)
