@@ -4,6 +4,20 @@ DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null && pwd )"
 
 source "$DIR/launch_env.sh"
 
+# `reboot` returns while shutdown is still in progress. Flashing AGNOS after a
+# successful verify/swap would corrupt the slot that was just activated, so
+# never continue once a reboot was requested.
+function reboot_and_wait {
+  sudo reboot
+  sleep 300
+}
+
+function wait_if_rebooting {
+  if [ "$(systemctl is-system-running 2> /dev/null)" = "stopping" ]; then
+    sleep 300
+  fi
+}
+
 function agnos_init {
   # TODO: move this to agnos
   sudo rm -f /data/etc/NetworkManager/system-connections/*.nmmeta
@@ -21,10 +35,25 @@ function agnos_init {
   if [ $(< /VERSION) != "$AGNOS_VERSION" ]; then
     AGNOS_PY="$DIR/system/hardware/tici/agnos.py"
     MANIFEST="$DIR/system/hardware/tici/agnos.json"
-    if $AGNOS_PY --verify $MANIFEST; then
-      sudo reboot
+    # the branch we were switched from may have already swapped slots and requested the reboot
+    wait_if_rebooting
+    # AGNOS 19.x has no pyserial; updaters of newer branches install this shim when they switch to us
+    if [ -d "$DIR/system/hardware/tici/pyserial_compat" ] && ! python3 -c "import serial" 2> /dev/null; then
+      export PYTHONPATH="$DIR/system/hardware/tici/pyserial_compat${PYTHONPATH:+:$PYTHONPATH}"
     fi
-    $DIR/system/hardware/tici/updater $AGNOS_PY $MANIFEST
+    if $AGNOS_PY --verify $MANIFEST; then
+      reboot_and_wait
+    fi
+    while true; do
+      # our updater can't draw on AGNOS 20.4+ (incompatible raylib); the OS ships a matching one
+      $DIR/system/hardware/tici/updater $AGNOS_PY $MANIFEST || \
+        { [ -x /usr/comma/updater ] && /usr/comma/updater $AGNOS_PY $MANIFEST; }
+      # no updater could finish the job; flash and swap without UI
+      wait_if_rebooting
+      if $AGNOS_PY --swap $MANIFEST; then
+        reboot_and_wait
+      fi
+    done
   fi
 }
 
