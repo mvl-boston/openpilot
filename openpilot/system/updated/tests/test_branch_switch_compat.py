@@ -92,6 +92,10 @@ class TestBranchSwitchCompat(unittest.TestCase):
       assert compat.MARKER in launch
       assert "--swap" in launch
       assert "pyserial_compat" in launch
+      # OS updater as fallback for a bundled UI that can't start, and no flashing after a reboot was requested
+      assert "|| \\\n        { [ -x /usr/comma/updater ] && /usr/comma/updater $AGNOS_PY $MANIFEST; }" in launch
+      self.assertEqual(launch.count("sudo reboot\n"), 2)
+      self.assertEqual(launch.count("sleep 300\n"), 2)
       assert compat.LEGACY_LAUNCH_OLD not in launch
       subprocess.check_call(["bash", "-n", os.path.join(tmp, "launch_chffrplus.sh")])
 
